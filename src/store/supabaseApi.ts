@@ -1,0 +1,346 @@
+// src/store/supabaseApi.ts
+import { createApi, fakeBaseQuery } from '@reduxjs/toolkit/query/react';
+import { supabase } from '../utils/supabaseClient';
+import type { User, Employee, EmployeeInsert, EmployeeUpdate, Attendance } from '../types';
+import { uploadEmployeeFile, listEmployeeFiles } from '../utils/storage';
+
+export const supabaseApi = createApi({
+  reducerPath: 'supabaseApi',
+  baseQuery: fakeBaseQuery(),
+  tagTypes: ['User', 'Employee', 'Attendance'],
+  endpoints: (builder) => ({
+    // ==================== AUTH ====================
+    login: builder.mutation<
+      { user: User; session: any },
+      { email: string; password: string }
+    >({
+      queryFn: async ({ email, password }) => {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) return { error };
+        if (!data.session) return { error: { message: 'No session' } };
+
+        const { data: empData } = await supabase
+          .from('employees')
+          .select('role')
+          .eq('id', data.user!.id)
+          .single();
+
+        const role = empData?.role || 'employee';
+
+        return {
+          data: {
+            user: { ...data.user!, role },
+            session: data.session,
+          },
+        };
+      },
+    }),
+
+    register: builder.mutation<{ user: User; session: any }, { email: string; password: string; full_name: string; position?: string }>({
+      queryFn: async ({ email, password, full_name, position = 'Employee' }) => {
+        try {
+          const { data: signupData, error: signupError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { role: 'employee', full_name, position } },
+          });
+          if (signupError || !signupData.user) return { error: signupError || { message: 'Signup failed' } };
+
+          const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+          if (loginError) return { error: loginError };
+
+          const insertData: EmployeeInsert = {
+            id: loginData.user.id,
+            full_name,
+            position,
+            salary: 0,
+            join_date: new Date().toISOString().split('T')[0],
+            role: 'employee',
+          };
+
+          const { error: insertError } = await supabase.from('employees').insert(insertData);
+          if (insertError) {
+            await supabase.auth.signOut();
+            return { error: insertError };
+          }
+
+          const userWithRole = { ...loginData.user, role: 'employee' };
+          return { data: { user: userWithRole, session: loginData.session } };
+        } catch (err) {
+          return { error: { message: 'Registration failed' } };
+        }
+      },
+      invalidatesTags: ['User', 'Employee'],
+    }),
+
+    // ==================== PROFILE ====================
+    getProfile: builder.query<Employee | null, void>({
+      queryFn: async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { data: null };
+
+        const { data, error } = await supabase
+          .from('employees')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) return { error };
+        return { data: data as Employee };
+      },
+      providesTags: ['Employee'],
+    }),
+
+    // ==================== EMPLOYEES ====================
+    getEmployees: builder.query<Employee[], { search?: string; position?: string }>({
+      queryFn: async ({ search, position }) => {
+        let query = supabase.from('employees').select('*').order('full_name');
+        if (search) query = query.ilike('full_name', `%${search}%`);
+        if (position) query = query.eq('position', position);
+        const { data, error } = await query;
+        if (error) return { error };
+        return { data: data as Employee[] };
+      },
+      providesTags: ['Employee'],
+    }),
+
+    updateEmployee: builder.mutation<Employee, { id: string } & Partial<EmployeeUpdate>>({
+      queryFn: async ({ id, ...updates }) => {
+        const { data, error } = await supabase
+          .from('employees')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) return { error };
+        return { data: data as Employee };
+      },
+      invalidatesTags: ['Employee'],
+    }),
+
+    deleteEmployee: builder.mutation<void, string>({
+      queryFn: async (id) => {
+        const { error } = await supabase.from('employees').delete().eq('id', id);
+        if (error) return { error };
+        return { data: undefined };
+      },
+      invalidatesTags: ['Employee'],
+    }),
+
+    // ==================== FILES ====================
+    uploadEmployeeFile: builder.mutation<string, { file: File; employeeId: string; type: 'cv' | 'id' | 'contract' }>({
+      queryFn: async ({ file, employeeId, type }) => {
+        const signedUrl = await uploadEmployeeFile(file, employeeId, type);
+        if (!signedUrl) return { error: { message: 'Upload failed' } };
+        return { data: signedUrl };
+      },
+      invalidatesTags: ['Employee'],
+    }),
+
+    getEmployeeFiles: builder.query<any[], string>({
+      queryFn: async (employeeId) => {
+        const files = await listEmployeeFiles(employeeId);
+        return { data: files };
+      },
+      providesTags: (result, error, employeeId) => [{ type: 'Employee', id: employeeId }],
+    }),
+
+    // ==================== ATTENDANCE ====================
+    getAttendance: builder.query<
+      Attendance[],
+      { employeeId?: string; startDate?: string; endDate?: string; search?: string }
+    >({
+      queryFn: async ({ employeeId, startDate, endDate, search }) => {
+        try {
+          let query = supabase
+            .from('attendance')
+            .select(`
+              id,
+              employee_id,
+              check_in,
+              check_out,
+              is_late,
+              hours_worked,
+              created_at,
+              employees!employee_id (full_name)
+            `)
+            .order('check_in', { ascending: false });
+
+          if (employeeId) query = query.eq('employee_id', employeeId);
+          
+          // Convert PKT date to UTC range for proper filtering
+          if (startDate) {
+            // PKT date start (00:00) - 5 hours = UTC equivalent
+            const utcStart = new Date(`${startDate}T00:00:00`);
+            utcStart.setHours(utcStart.getHours() - 5); // PKT to UTC
+            query = query.gte('check_in', utcStart.toISOString());
+          }
+          
+          if (endDate) {
+            // PKT date end (23:59) - 5 hours = UTC equivalent
+            const utcEnd = new Date(`${endDate}T23:59:59`);
+            utcEnd.setHours(utcEnd.getHours() - 5); // PKT to UTC
+            query = query.lte('check_in', utcEnd.toISOString());
+          }
+          
+          if (search) query = query.ilike('employees.full_name', `%${search}%`);
+
+          const { data, error } = await query;
+          if (error) {
+            console.error('getAttendance error:', error);
+            return { error };
+          }
+          
+          console.log('Fetched attendance records:', data?.length);
+          return { data: (data || []) as Attendance[] };
+        } catch (err) {
+          console.error('getAttendance exception:', err);
+          return { error: err as any };
+        }
+      },
+      providesTags: (result) =>
+        result
+          ? [...result.map((r) => ({ type: 'Attendance' as const, id: r.id })), { type: 'Attendance', id: 'LIST' }]
+          : [{ type: 'Attendance', id: 'LIST' }],
+    }),
+
+    checkIn: builder.mutation<Attendance, { employeeId: string }>({
+      queryFn: async ({ employeeId }) => {
+        try {
+          const now = new Date();
+          const pkTime = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+          const startOfDay = new Date(pkTime);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(pkTime);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          const { data: existing, error: selectErr } = await supabase
+            .from('attendance')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .gte('check_in', startOfDay.toISOString())
+            .lte('check_in', endOfDay.toISOString())
+            .maybeSingle();
+
+          if (selectErr && selectErr.code !== 'PGRST116') return { error: selectErr };
+          if (existing && !existing.check_out) {
+            return { error: { message: 'Already checked in today' } };
+          }
+
+          const isLate = pkTime.getHours() >= 9 && (pkTime.getHours() > 9 || pkTime.getMinutes() > 0);
+          const payload = {
+            employee_id: employeeId,
+            check_in: now.toISOString(),
+            is_late: isLate,
+            hours_worked: 0,
+          };
+
+          if (existing) {
+            const { data, error } = await supabase
+              .from('attendance')
+              .update(payload)
+              .eq('id', existing.id)
+              .select()
+              .single();
+            if (error) return { error };
+            return { data: data as Attendance };
+          } else {
+            const { data, error } = await supabase
+              .from('attendance')
+              .insert(payload)
+              .select()
+              .single();
+            if (error) return { error };
+            return { data: data as Attendance };
+          }
+        } catch (err) {
+          return { error: err as any };
+        }
+      },
+      invalidatesTags: [{ type: 'Attendance', id: 'LIST' }],
+    }),
+
+    // FIXED: CheckOut mutation
+    checkOut: builder.mutation<Attendance, { employeeId: string }>({
+      queryFn: async ({ employeeId }) => {
+        try {
+          console.log('Starting checkout for:', employeeId);
+          const now = new Date();
+          const pkTime = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+          const today = pkTime.toISOString().split('T')[0];
+
+          // 1. Find today's OPEN record (check_out = null)
+          const { data: openRecord, error: fetchError } = await supabase
+            .from('attendance')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .gte('check_in', `${today}T00:00:00Z`)
+            .lte('check_in', `${today}T23:59:59Z`)
+            .is('check_out', null)
+            .maybeSingle();
+
+          console.log('Found record:', openRecord);
+          console.log('Fetch error:', fetchError);
+
+          if (fetchError) return { error: fetchError };
+          if (!openRecord) {
+            return { error: { message: 'No active check-in found. Please refresh.' } };
+          }
+
+          // 2. Calculate hours
+          const checkInTime = new Date(openRecord.check_in);
+          const hoursWorked = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+
+          console.log('Updating record ID:', openRecord.id);
+          console.log('Hours worked:', hoursWorked);
+
+          // 3. Update with .single() - THIS IS THE FIX
+          const { data: updatedRecord, error: updateError } = await supabase
+            .from('attendance')
+            .update({
+              check_out: now.toISOString(),
+              hours_worked: Number(hoursWorked.toFixed(2)),
+            })
+            .eq('id', openRecord.id)
+            .select()
+            .single(); // ← Changed from .select() to .select().single()
+
+          console.log('Updated record:', updatedRecord);
+          console.log('Update error:', updateError);
+
+          if (updateError) {
+            console.error('Update failed:', updateError);
+            return { error: updateError };
+          }
+
+          if (!updatedRecord) {
+            return { error: { message: 'Update returned no data. Check RLS policies.' } };
+          }
+
+          return { data: updatedRecord as Attendance };
+        } catch (err) {
+          console.error('Checkout exception:', err);
+          return { error: { message: 'Unexpected error: ' + (err as Error).message } };
+        }
+      },
+      invalidatesTags: [{ type: 'Attendance', id: 'LIST' }],
+    }),
+  }),
+});
+
+export const {
+  useLoginMutation,
+  useRegisterMutation,
+  useGetProfileQuery,
+  useGetEmployeesQuery,
+  useUpdateEmployeeMutation,
+  useDeleteEmployeeMutation,
+  useUploadEmployeeFileMutation,
+  useGetEmployeeFilesQuery,
+  useGetAttendanceQuery,
+  useCheckInMutation,
+  useCheckOutMutation,
+} = supabaseApi;
