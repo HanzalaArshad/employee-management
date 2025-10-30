@@ -328,6 +328,56 @@ export const supabaseApi = createApi({
       },
       invalidatesTags: [{ type: 'Attendance', id: 'LIST' }],
     }),
+
+    // Add to endpoints
+getLeaves: builder.query<Leave[], { employeeId?: string; status?: string }>({
+  queryFn: async ({ employeeId, status }) => {
+    let query = supabase
+      .from('leaves')
+      .select('*, employees!employee_id(full_name)')
+      .order('created_at', { ascending: false });
+    if (employeeId) query = query.eq('employee_id', employeeId);
+    if (status) query = query.eq('status', status);
+    const { data, error } = await query;
+    if (error) return { error };
+    return { data: data as Leave[] };
+  },
+  providesTags: (result) =>
+    result
+      ? [...result.map(({ id }) => ({ type: 'Leave' as const, id })), { type: 'Leave', id: 'LIST' }]
+      : [{ type: 'Leave', id: 'LIST' }],
+}),
+
+applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by'>>({
+  queryFn: async (leave) => {
+    const { data, error } = await supabase
+      .from('leaves')
+      .insert({ ...leave, status: 'pending' })
+      .select()
+      .single();
+    if (error) return { error };
+    return { data: data as Leave };
+  },
+  invalidatesTags: [{ type: 'Leave', id: 'LIST' }],
+}),
+
+updateLeaveStatus: builder.mutation<Leave, { id: string; status: 'approved' | 'rejected'; approved_by: string }>({
+  queryFn: async ({ id, status, approved_by }) => {
+    const { data, error } = await supabase
+      .from('leaves')
+      .update({ 
+        status, 
+        approved_by,
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) return { error };
+    return { data: data as Leave };
+  },
+  invalidatesTags: (result, error, { id }) => [{ type: 'Leave', id }, { type: 'Leave', id: 'LIST' }],
+}),
   }),
 });
 
@@ -343,4 +393,7 @@ export const {
   useGetAttendanceQuery,
   useCheckInMutation,
   useCheckOutMutation,
+  useGetLeavesQuery,
+  useApplyLeaveMutation,
+  useUpdateLeaveStatusMutation,
 } = supabaseApi;

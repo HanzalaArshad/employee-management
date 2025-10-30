@@ -27,6 +27,8 @@ export interface AttendanceSummary {
   is_late: boolean;
 }
 
+
+
 export type LeaveType = 'sick' | 'personal';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
 export type PayrollStatus = 'draft' | 'approved' | 'paid';
