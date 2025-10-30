@@ -1,3 +1,4 @@
+// ✅ FIXED: AttendanceDashboard.tsx
 import { useState, useMemo } from "react";
 import {
   Box,
@@ -7,12 +8,12 @@ import {
   Button,
 } from "@mui/material";
 import { DataGrid, type GridColDef, GridToolbar } from "@mui/x-data-grid";
-import { format } from "date-fns";
-import   Papa from "papaparse";
+import Papa from "papaparse";
 import {
   useGetEmployeesQuery,
   useGetAttendanceQuery,
 } from "../../../store/supabaseApi";
+// import { size } from "zod";
 
 const formatPakistanTime = (utcString: string | null) => {
   if (!utcString) return "—";
@@ -20,9 +21,20 @@ const formatPakistanTime = (utcString: string | null) => {
   try {
     const utcDate = new Date(utcString);
     
-    const pktDate = new Date(utcDate.getTime() + (5 * 60 * 60 * 1000));
+    console.log('UTC String:', utcString);
+    console.log('Parsed UTC:', utcDate.toISOString());
+    console.log('UTC Hours:', utcDate.getUTCHours(), 'Minutes:', utcDate.getUTCMinutes());
     
-    return format(pktDate, "hh:mm a");
+   
+    const pktTime = utcDate.toLocaleString('en-US', {
+      timeZone: 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    
+    
+    return pktTime;
   } catch (error) {
     console.error("Error formatting time:", error);
     return "—";
@@ -31,8 +43,9 @@ const formatPakistanTime = (utcString: string | null) => {
 
 const getTodayPKT = () => {
   const now = new Date();
-  const pktNow = new Date(now.getTime() + (5 * 60 * 60 * 1000));
-  return pktNow.toISOString().split('T')[0];
+  const pktOffset = 5 * 60 * 60 * 1000;
+  const pktDate = new Date(now.getTime() + pktOffset);
+  return pktDate.toISOString().split('T')[0];
 };
 
 export default function AttendanceDashboard() {
@@ -47,67 +60,47 @@ export default function AttendanceDashboard() {
     endDate: dateFilter,
   });
 
-
-const rows = useMemo(() => {
-  console.log('========== ATTENDANCE DEBUG ==========');
-  console.log('📊 Total employees:', employees.length);
-  console.log('📊 Total attendance records:', attendance.length);
-  console.log('📅 Date filter:', dateFilter);
-  console.log('👥 Employees:', employees.map(e => ({ id: e.id, name: e.full_name })));
-  console.log('✅ Attendance records:', attendance.map(a => ({
-    employee_id: a.employee_id,
-    check_in: a.check_in,
-    check_out: a.check_out
-  })));
-  console.log('=====================================');
+  const rows = useMemo(() => {
   
-  return employees.map((emp) => {
-    // Find today's attendance record for this employee
-    const todayRecord = attendance.find(
-      (a) => a.employee_id === emp.id
-    );
+    return employees.map((emp) => {
+      const record = attendance.find((a) => a.employee_id === emp.id);
 
-    if (todayRecord) {
-      console.log(`✅ Found attendance for ${emp.full_name}:`, {
-        check_in: todayRecord.check_in,
-        check_out: todayRecord.check_out
-      });
-    } else {
-      console.log(`❌ No attendance found for ${emp.full_name} (ID: ${emp.id})`);
-    }
+     
 
-    const checkInTime = todayRecord?.check_in 
-      ? formatPakistanTime(todayRecord.check_in) 
-      : "—";
-    
-    const checkOutTime = todayRecord?.check_out 
-      ? formatPakistanTime(todayRecord.check_out) 
-      : "—";
+      const checkInTime = record?.check_in 
+        ? formatPakistanTime(record.check_in) 
+        : "—";
+      
+      const checkOutTime = record?.check_out 
+        ? formatPakistanTime(record.check_out) 
+        : "—";
 
-    const status = todayRecord ? "Present" : "Absent";
-    const hoursWorked = todayRecord?.hours_worked || 0;
-    const isLate = todayRecord?.is_late ? "Yes" : "No";
+      const status = record ? "Present" : "Absent";
+      const hoursWorked = record?.hours_worked || 0;
+      const isLate = record?.is_late ? "Yes" : "No";
 
-    return {
-      id: emp.id,
-      name: emp.full_name,
-      position: emp.position || "—",
-      status,
-      check_in: checkInTime,
-      check_out: checkOutTime,
-      hours_worked: typeof hoursWorked === 'number' ? hoursWorked.toFixed(2) : '0.00',
-      is_late: isLate,
-    };
-  });
-}, [employees, attendance, dateFilter]);
+      return {
+        id: emp.id,
+        name: emp.full_name,
+        position: emp.position || "—",
+        status,
+        check_in: checkInTime,
+        check_out: checkOutTime,
+        hours_worked: typeof hoursWorked === 'number' ? hoursWorked.toFixed(2) : '0.00',
+        is_late: isLate,
+      };
+    });
+  }, [employees, attendance, dateFilter]);
 
-  const filteredRows = rows.filter((r) => {
-    const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
-    const matchesPosition = positionFilter
-      ? r.position.toLowerCase().includes(positionFilter.toLowerCase())
-      : true;
-    return matchesSearch && matchesPosition;
-  });
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
+      const matchesPosition = positionFilter
+        ? r.position.toLowerCase().includes(positionFilter.toLowerCase())
+        : true;
+      return matchesSearch && matchesPosition;
+    });
+  }, [rows, search, positionFilter]);
 
   const handleExport = () => {
     const csv = Papa.unparse(filteredRows);
@@ -122,21 +115,51 @@ const rows = useMemo(() => {
 
   if (loadingEmp || loadingAtt) {
     return (
-      <Box display="flex" justifyContent="center" mt={6}>
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
         <CircularProgress />
       </Box>
     );
   }
 
   const columns: GridColDef[] = [
-    { field: "name", headerName: "Employee", flex: 1.2 },
-    { field: "position", headerName: "Position", flex: 1 },
+    { 
+      field: "name", 
+      headerName: "Employee Name", 
+      flex: 1.2,
+      minWidth: 180,
+
+       renderCell: (params) => (
+        <Typography  sx={{ 
+          color: params.value !== "—" ?  "#000" : "#999",fontSize:'14px'
+        }}>
+          {params.value}
+        </Typography>
+      )
+    },
+    { 
+      field: "position", 
+      headerName: "Position", 
+      flex: 1,
+      minWidth: 150,
+       renderCell: (params) => (
+        <Typography  sx={{ 
+          color: params.value !== "—" ?  "#000" : "#999",fontSize:'14px'
+        }}>
+          {params.value}
+        </Typography>
+      )
+      
+      
+    },
     { 
       field: "check_in", 
       headerName: "Check-In (PKT)", 
       flex: 1,
+      minWidth: 130,
       renderCell: (params) => (
-        <Typography sx={{ fontWeight: params.value !== "—" ? 600 : 400 }}>
+        <Typography  sx={{ 
+          color: params.value !== "—" ?  "#1976d2" : "#999",fontSize:'14px'
+        }}>
           {params.value}
         </Typography>
       )
@@ -145,73 +168,81 @@ const rows = useMemo(() => {
       field: "check_out", 
       headerName: "Check-Out (PKT)", 
       flex: 1,
+      minWidth: 130,
       renderCell: (params) => (
-        <Typography sx={{ fontWeight: params.value !== "—" ? 600 : 400 }}>
+      <Typography  sx={{ 
+          color: params.value !== "—" ?  "#1976d2" : "#999",fontSize:'14px'
+        }}>
           {params.value}
         </Typography>
       )
     },
     {
       field: "hours_worked",
-      headerName: "Hours Worked",
-      flex: 1,
-      renderCell: (params) => `${params.value} hrs`,
+      headerName: "Hours",
+      flex: 0.8,
+      minWidth: 100,
+      renderCell: (params) => (
+        <Typography sx={{ fontWeight: 500 }}>
+          {params.value} hrs
+        </Typography>
+      ),
     },
     {
       field: "is_late",
       headerName: "Late?",
       flex: 0.7,
+      minWidth: 90,
       renderCell: (params) => (
-        <Box
+        <Typography
           sx={{
-            px: 1,
-            py: 0.3,
-            bgcolor: params.value === "Yes" ? "#FFEBEE" : "#E8F5E9",
+            px: 1.5,
+            py: 0.4,
             color: params.value === "Yes" ? "#C62828" : "#2E7D32",
             borderRadius: "6px",
-            fontSize: "0.875rem",
+            fontSize: "0.813rem",
             fontWeight: 600,
+            textAlign: "center",
           }}
         >
           {params.value}
-        </Box>
+        </Typography>
       ),
     },
     {
       field: "status",
       headerName: "Status",
-      flex: 0.8,
+      flex: 0.9,
+      minWidth: 110,
       renderCell: (params) => (
-        <Box
+        <Typography
           sx={{
             px: 1.5,
-            py: 0.4,
-            bgcolor: params.value === "Present" ? "#C8E6C9" : "#FFCDD2",
+            py: 0.5,
             color: params.value === "Present" ? "#1B5E20" : "#B71C1C",
             borderRadius: "8px",
             textAlign: "center",
-            fontWeight: 600,
-            fontSize: "0.875rem",
+            fontWeight: 700,
+            fontSize: "0.813rem",
           }}
         >
           {params.value}
-        </Box>
+        </Typography>
       ),
     },
   ];
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
+    <Box sx={{ p:3 }}>
+      <Typography variant="h3" gutterBottom fontWeight="bold">
         Attendance Dashboard
       </Typography>
-
-      {/* ✅ Filters */}
+    
       <Box
         sx={{
           display: "flex",
           gap: 2,
-          mb: 2,
+          mb: 3,
           flexWrap: "wrap",
           alignItems: "center",
         }}
@@ -227,42 +258,44 @@ const rows = useMemo(() => {
         />
         
         <TextField
-          label="Search by Name"
+          label=" Search Employee"
           size="small"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          placeholder="Enter name..."
           sx={{ width: 200 }}
         />
         
         <TextField
-          label="Filter by Position"
+          label=" Position"
           size="small"
           value={positionFilter}
           onChange={(e) => setPositionFilter(e.target.value)}
+          placeholder="Filter by position"
           sx={{ width: 200 }}
         />
 
         <Button variant="contained" onClick={handleExport}>
-          Export CSV
+           Export CSV
         </Button>
         
         <Button variant="outlined" onClick={() => refetch()}>
-          Refresh
+           Refresh
         </Button>
       </Box>
 
-      {/* ✅ Summary Stats */}
-      <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+      <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
         <Box
           sx={{
             p: 2,
-            bgcolor: "#E3F2FD",
+            bgcolor: "#f7fbffff",
             borderRadius: 2,
             flex: 1,
+            minWidth: 150,
           }}
         >
           <Typography variant="body2" color="text.secondary">
-            Total Employees
+             Total Employees
           </Typography>
           <Typography variant="h5" fontWeight="bold">
             {filteredRows.length}
@@ -272,13 +305,14 @@ const rows = useMemo(() => {
         <Box
           sx={{
             p: 2,
-            bgcolor: "#E8F5E9",
+            bgcolor: "#f7fbffff",
             borderRadius: 2,
             flex: 1,
+            minWidth: 150,
           }}
         >
           <Typography variant="body2" color="text.secondary">
-            Present
+             Present
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="success.main">
             {filteredRows.filter((r) => r.status === "Present").length}
@@ -288,13 +322,14 @@ const rows = useMemo(() => {
         <Box
           sx={{
             p: 2,
-            bgcolor: "#FFEBEE",
+            bgcolor: "#f7fbffff",
             borderRadius: 2,
             flex: 1,
+            minWidth: 150,
           }}
         >
           <Typography variant="body2" color="text.secondary">
-            Absent
+             Absent
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="error.main">
             {filteredRows.filter((r) => r.status === "Absent").length}
@@ -304,12 +339,13 @@ const rows = useMemo(() => {
         <Box
           sx={{
             p: 2,
-            bgcolor: "#FFF3E0",
+            bgcolor: "#f7fbffff",
             borderRadius: 2,
             flex: 1,
+            minWidth: 150,
           }}
         >
-          <Typography variant="body2" color="text.secondary">
+          <Typography  color="text.secondary">
             Late
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="warning.main">
@@ -318,7 +354,6 @@ const rows = useMemo(() => {
         </Box>
       </Box>
 
-      {/* ✅ Data Table */}
       <DataGrid
         autoHeight
         rows={filteredRows}
@@ -333,6 +368,9 @@ const rows = useMemo(() => {
         sx={{
           '& .MuiDataGrid-cell': {
             py: 1.5,
+          },
+          '& .MuiDataGrid-row:hover': {
+            bgcolor: '#f5f5f5',
           },
         }}
       />
