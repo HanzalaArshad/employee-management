@@ -27,27 +27,26 @@ export interface AttendanceSummary {
   is_late: boolean;
 }
 
-// src/types/index.ts
-export type Leave = {
+
+export interface Leave {
   id: string;
   employee_id: string;
-  type: 'sick' | 'casual' | 'annual';
+  type: 'sick' | 'casual' | 'annual' | 'emergency';
   start_date: string;
+  end_date?: string; // Make it optional
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
   approved_by?: string;
   created_at: string;
   updated_at: string;
-  employees: {
+  employees?: {
     full_name: string;
     position: string;
   };
-
-
   approver?: {
     full_name: string;
   };
-};
+}
 export type LeaveType = 'sick' | 'personal';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
 export type PayrollStatus = 'draft' | 'approved' | 'paid';

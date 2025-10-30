@@ -1,9 +1,11 @@
 // src/pages/employee/leave/MyLeaves.tsx
-import { Box, Typography, Button, CircularProgress, Alert } from '@mui/material';
+import { useState } from 'react';
+import { Box, Typography, Button, CircularProgress, Alert, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { useGetProfileQuery, useGetLeavesQuery } from '../../../store/supabaseApi';
+import { useGetProfileQuery, useGetLeavesQuery, useDeleteLeaveMutation } from '../../../store/supabaseApi';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 // Safe formatter
 const safeFormat = (dateString: string, fmt: string = 'dd MMM yyyy') => {
@@ -13,15 +15,68 @@ const safeFormat = (dateString: string, fmt: string = 'dd MMM yyyy') => {
 
 export default function MyLeaves() {
   const { data: profile } = useGetProfileQuery();
-  const { data: leaves = [], isLoading } = useGetLeavesQuery({ employeeId: profile?.id });
+const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({ 
+  employeeId: profile?.id 
+});  const [deleteLeave, { isLoading: isDeleting }] = useDeleteLeaveMutation();
+
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; leaveId: string | null; leaveDate: string }>({
+    open: false,
+    leaveId: null,
+    leaveDate: '',
+  });
+
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleDeleteClick = (leaveId: string, leaveDate: string) => {
+    setDeleteDialog({ open: true, leaveId, leaveDate });
+  };
+
+  const handleDeleteConfirm = async () => {
+  if (!deleteDialog.leaveId) return;
+
+  try {
+    await deleteLeave(deleteDialog.leaveId).unwrap();
+    
+    // FORCE IMMEDIATE REFETCH
+    await refetch();
+    
+    setAlert({ type: 'success', message: '✅ Leave deleted successfully!' });
+    setDeleteDialog({ open: false, leaveId: null, leaveDate: '' });
+    
+    setTimeout(() => setAlert(null), 3000);
+  } catch (err: any) {
+    console.error('Delete leave error:', err);
+    setAlert({ 
+      type: 'error', 
+      message: err?.message || 'Failed to delete leave. Please try again.' 
+    });
+  }
+};
+
+  const handleDeleteCancel = () => {
+    setDeleteDialog({ open: false, leaveId: null, leaveDate: '' });
+  };
 
   const columns: GridColDef[] = [
-    { field: 'type', headerName: 'Type', width: 120 },
+    { 
+      field: 'type', 
+      headerName: 'Type', 
+      width: 120,
+    },
     {
       field: 'start_date',
       headerName: 'Date',
       width: 150,
-      valueGetter: (params) => safeFormat(params.value, 'dd MMM yyyy'),
+    },
+    {
+      field: 'reason',
+      headerName: 'Reason',
+      width: 200,
+      renderCell: (params) => (
+        <span title={params.value}>
+          {params.value?.length > 30 ? params.value.slice(0, 30) + '...' : params.value}
+        </span>
+      ),
     },
     {
       field: 'status',
@@ -57,11 +112,28 @@ export default function MyLeaves() {
         );
       },
     },
+   
     {
-      field: 'created_at',
-      headerName: 'Applied On',
-      width: 150,
-      valueGetter: (params) => safeFormat(params.value, 'dd MMM yyyy'),
+      field: 'actions',
+      headerName: 'Actions',
+      width: 100,
+      sortable: false,
+      renderCell: (params) => {
+        const status = params.row.status;
+        // Only allow delete for pending leaves
+        if (status !== 'pending') return null;
+        
+        return (
+          <IconButton
+            color="error"
+            size="small"
+            onClick={() => handleDeleteClick(params.row.id, params.row.start_date)}
+            title="Delete Leave"
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        );
+      },
     },
   ];
 
@@ -76,6 +148,12 @@ export default function MyLeaves() {
           Apply Leave
         </Button>
       </Box>
+
+      {alert && (
+        <Alert severity={alert.type} sx={{ mb: 2 }} onClose={() => setAlert(null)}>
+          {alert.message}
+        </Alert>
+      )}
 
       {leaves.length === 0 ? (
         <Alert
@@ -101,21 +179,53 @@ export default function MyLeaves() {
           </Button>
         </Alert>
       ) : (
-        <Box sx={{ height: 500, width: '100%' }}>
-          <DataGrid
-            rows={leaves}
-            columns={columns}
-            getRowId={(row) => row.id}
-            loading={isLoading}
-            initialState={{
-              pagination: { paginationModel: { pageSize: 5, page: 0 } },
-              sorting: { sortModel: [{ field: 'created_at', sort: 'desc' }] },
-            }}
-            pageSizeOptions={[5, 10, 20]}
-            disableRowSelectionOnClick
-          />
-        </Box>
+        <>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>Note:</strong> You can only delete leaves that are in "Pending" status.
+          </Alert>
+          <Box sx={{ height: 500, width: '100%' }}>
+            <DataGrid
+              rows={leaves}
+              columns={columns}
+              getRowId={(row) => row.id}
+              loading={isLoading}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 5, page: 0 } },
+                sorting: { sortModel: [{ field: 'created_at', sort: 'desc' }] },
+              }}
+              pageSizeOptions={[5, 10, 20]}
+              disableRowSelectionOnClick
+            />
+          </Box>
+        </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialog.open} onClose={handleDeleteCancel}>
+        <DialogTitle>Delete Leave Application?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete your leave application for{' '}
+            <strong>{safeFormat(deleteDialog.leaveDate)}</strong>?
+            <br />
+            <br />
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} disabled={isDeleting}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

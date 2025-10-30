@@ -418,18 +418,30 @@ applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' |
       ],
     }),
 
-    deleteLeave: builder.mutation<void, string>({
-      queryFn: async (id) => {
-        const { error } = await supabase
-          .from('leaves')
-          .delete()
-          .eq('id', id);
-        
-        if (error) return { error };
-        return { data: undefined };
-      },
-      invalidatesTags: [{ type: 'Leave', id: 'LIST' }],
-    }),
+deleteLeave: builder.mutation<void, string>({
+  queryFn: async (id) => {
+    console.log('🗑️ Deleting leave:', id);
+    
+    const { error, count } = await supabase
+      .from('leaves')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('❌ Delete error:', error);
+      return { error };
+    }
+    
+    console.log('✅ Deleted successfully, count:', count);
+    return { data: undefined };
+  },
+  // CRITICAL: Must invalidate BOTH tags
+  invalidatesTags: (result, error, id) => [
+    { type: 'Leave', id },
+    { type: 'Leave', id: 'LIST' },
+  ],
+}),
+
   }),
 });
 

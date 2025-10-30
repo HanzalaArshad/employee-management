@@ -1,32 +1,25 @@
+
 import { useState, useMemo } from "react";
-import {Box,Typography,CircularProgress,TextField,Button} from "@mui/material";
+import {Box,Typography,CircularProgress,TextField,Button,Chip} from "@mui/material";
 import { DataGrid, type GridColDef, GridToolbar } from "@mui/x-data-grid";
 import Papa from "papaparse";
 import {
   useGetEmployeesQuery,
   useGetAttendanceQuery,
+  useGetLeavesQuery, // ✅ ADD THIS
 } from "../../../store/supabaseApi";
-// import { size } from "zod";
 
 const formatPakistanTime = (utcString: string | null) => {
   if (!utcString) return "—";
   
   try {
     const utcDate = new Date(utcString);
-    
-    console.log('UTC String:', utcString);
-    console.log('Parsed UTC:', utcDate.toISOString());
-    console.log('UTC Hours:', utcDate.getUTCHours(), 'Minutes:', utcDate.getUTCMinutes());
-    
-   
     const pktTime = utcDate.toLocaleString('en-US', {
       timeZone: 'Asia/Karachi',
       hour: '2-digit',
       minute: '2-digit',
       hour12: true
     });
-    
-    
     return pktTime;
   } catch (error) {
     console.error("Error formatting time:", error);
@@ -53,12 +46,48 @@ export default function AttendanceDashboard() {
     endDate: dateFilter,
   });
 
+  // ✅ NEW: Fetch approved leaves for selected date
+  const { data: allLeaves = [], isLoading: loadingLeaves } = useGetLeavesQuery({
+    status: 'approved'
+  });
+
+  // ✅ NEW: Helper function to check if employee is on leave
+  const isEmployeeOnLeave = (employeeId: string, date: string) => {
+    return allLeaves.some(leave => {
+      const leaveDate = leave.start_date;
+      const endDate = leave.end_date || leave.start_date;
+      
+      return (
+        leave.employee_id === employeeId &&
+        leave.status === 'approved' &&
+        date >= leaveDate &&
+        date <= endDate
+      );
+    });
+  };
+
+  // ✅ NEW: Get leave type for employee on specific date
+  const getLeaveType = (employeeId: string, date: string) => {
+    const leave = allLeaves.find(l => {
+      const leaveDate = l.start_date;
+      const endDate = l.end_date || l.start_date;
+      
+      return (
+        l.employee_id === employeeId &&
+        l.status === 'approved' &&
+        date >= leaveDate &&
+        date <= endDate
+      );
+    });
+    
+    return leave?.type || null;
+  };
+
   const rows = useMemo(() => {
-  
     return employees.map((emp) => {
       const record = attendance.find((a) => a.employee_id === emp.id);
-
-     
+      const onLeave = isEmployeeOnLeave(emp.id, dateFilter);
+      const leaveType = getLeaveType(emp.id, dateFilter);
 
       const checkInTime = record?.check_in 
         ? formatPakistanTime(record.check_in) 
@@ -68,7 +97,14 @@ export default function AttendanceDashboard() {
         ? formatPakistanTime(record.check_out) 
         : "—";
 
-      const status = record ? "Present" : "Absent";
+      // ✅ UPDATED: Status logic with leave check
+      let status = "Absent";
+      if (record) {
+        status = "Present";
+      } else if (onLeave) {
+        status = "On Leave";
+      }
+
       const hoursWorked = record?.hours_worked || 0;
       const isLate = record?.is_late ? "Yes" : "No";
 
@@ -77,13 +113,14 @@ export default function AttendanceDashboard() {
         name: emp.full_name,
         position: emp.position || "—",
         status,
+        leaveType, // ✅ NEW
         check_in: checkInTime,
         check_out: checkOutTime,
         hours_worked: typeof hoursWorked === 'number' ? hoursWorked.toFixed(2) : '0.00',
         is_late: isLate,
       };
     });
-  }, [employees, attendance, dateFilter]);
+  }, [employees, attendance, allLeaves, dateFilter]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
@@ -106,7 +143,7 @@ export default function AttendanceDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  if (loadingEmp || loadingAtt) {
+  if (loadingEmp || loadingAtt || loadingLeaves) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
         <CircularProgress />
@@ -120,10 +157,10 @@ export default function AttendanceDashboard() {
       headerName: "Employee Name", 
       flex: 1.2,
       minWidth: 180,
-
-       renderCell: (params) => (
-        <Typography  sx={{ 
-          color: params.value !== "—" ?  "#000" : "#999",fontSize:'14px'
+      renderCell: (params) => (
+        <Typography sx={{ 
+          color: params.value !== "—" ?  "#000" : "#999",
+          fontSize:'14px'
         }}>
           {params.value}
         </Typography>
@@ -134,15 +171,14 @@ export default function AttendanceDashboard() {
       headerName: "Position", 
       flex: 1,
       minWidth: 150,
-       renderCell: (params) => (
-        <Typography  sx={{ 
-          color: params.value !== "—" ?  "#000" : "#999",fontSize:'14px'
+      renderCell: (params) => (
+        <Typography sx={{ 
+          color: params.value !== "—" ?  "#000" : "#999",
+          fontSize:'14px'
         }}>
           {params.value}
         </Typography>
       )
-      
-      
     },
     { 
       field: "check_in", 
@@ -150,8 +186,9 @@ export default function AttendanceDashboard() {
       flex: 1,
       minWidth: 130,
       renderCell: (params) => (
-        <Typography  sx={{ 
-          color: params.value !== "—" ?  "#1976d2" : "#999",fontSize:'14px'
+        <Typography sx={{ 
+          color: params.value !== "—" ?  "#1976d2" : "#999",
+          fontSize:'14px'
         }}>
           {params.value}
         </Typography>
@@ -163,8 +200,9 @@ export default function AttendanceDashboard() {
       flex: 1,
       minWidth: 130,
       renderCell: (params) => (
-      <Typography  sx={{ 
-          color: params.value !== "—" ?  "#1976d2" : "#999",fontSize:'14px'
+        <Typography sx={{ 
+          color: params.value !== "—" ?  "#1976d2" : "#999",
+          fontSize:'14px'
         }}>
           {params.value}
         </Typography>
@@ -205,23 +243,57 @@ export default function AttendanceDashboard() {
     {
       field: "status",
       headerName: "Status",
-      flex: 0.9,
-      minWidth: 110,
-      renderCell: (params) => (
-        <Typography
-          sx={{
-            px: 1.5,
-            py: 0.5,
-            color: params.value === "Present" ? "#1B5E20" : "#B71C1C",
-            borderRadius: "8px",
-            textAlign: "center",
-            fontWeight: 700,
-            fontSize: "0.813rem",
-          }}
-        >
-          {params.value}
-        </Typography>
-      ),
+      flex: 1.2,
+      minWidth: 140,
+      // ✅ UPDATED: Show leave type chip for on-leave employees
+      renderCell: (params) => {
+        const status = params.value;
+        const leaveType = params.row.leaveType;
+        
+        if (status === "On Leave") {
+          return (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Chip
+                label="On Leave"
+                size="small"
+                sx={{
+                  bgcolor: '#FFF3E0',
+                  color: '#E65100',
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                }}
+              />
+              {leaveType && (
+                <Chip
+                  label={leaveType.charAt(0).toUpperCase() + leaveType.slice(1)}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    fontSize: '0.7rem',
+                    height: '20px',
+                  }}
+                />
+              )}
+            </Box>
+          );
+        }
+        
+        return (
+          <Typography
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              color: status === "Present" ? "#1B5E20" : "#B71C1C",
+              borderRadius: "8px",
+              textAlign: "center",
+              fontWeight: 700,
+              fontSize: "0.813rem",
+            }}
+          >
+            {status}
+          </Typography>
+        );
+      },
     },
   ];
 
@@ -251,7 +323,7 @@ export default function AttendanceDashboard() {
         />
         
         <TextField
-          label=" Search Employee"
+          label="Search Employee"
           size="small"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -260,7 +332,7 @@ export default function AttendanceDashboard() {
         />
         
         <TextField
-          label=" Position"
+          label="Position"
           size="small"
           value={positionFilter}
           onChange={(e) => setPositionFilter(e.target.value)}
@@ -269,11 +341,11 @@ export default function AttendanceDashboard() {
         />
 
         <Button variant="contained" onClick={handleExport}>
-           Export CSV
+          Export CSV
         </Button>
         
         <Button variant="outlined" onClick={() => refetch()}>
-           Refresh
+          Refresh
         </Button>
       </Box>
 
@@ -288,7 +360,7 @@ export default function AttendanceDashboard() {
           }}
         >
           <Typography variant="body2" color="text.secondary">
-             Total Employees
+            Total Employees
           </Typography>
           <Typography variant="h5" fontWeight="bold">
             {filteredRows.length}
@@ -305,10 +377,28 @@ export default function AttendanceDashboard() {
           }}
         >
           <Typography variant="body2" color="text.secondary">
-             Present
+            Present
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="success.main">
             {filteredRows.filter((r) => r.status === "Present").length}
+          </Typography>
+        </Box>
+        
+        {/* ✅ NEW: On Leave Card */}
+        <Box
+          sx={{
+            p: 2,
+            bgcolor: "#f7fbffff",
+            borderRadius: 2,
+            flex: 1,
+            minWidth: 150,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            On Leave
+          </Typography>
+          <Typography variant="h5" fontWeight="bold" sx={{ color: '#E65100' }}>
+            {filteredRows.filter((r) => r.status === "On Leave").length}
           </Typography>
         </Box>
         
@@ -322,7 +412,7 @@ export default function AttendanceDashboard() {
           }}
         >
           <Typography variant="body2" color="text.secondary">
-             Absent
+            Absent
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="error.main">
             {filteredRows.filter((r) => r.status === "Absent").length}
@@ -338,7 +428,7 @@ export default function AttendanceDashboard() {
             minWidth: 150,
           }}
         >
-          <Typography  color="text.secondary">
+          <Typography color="text.secondary">
             Late
           </Typography>
           <Typography variant="h5" fontWeight="bold" color="warning.main">
@@ -370,3 +460,4 @@ export default function AttendanceDashboard() {
     </Box>
   );
 }
+

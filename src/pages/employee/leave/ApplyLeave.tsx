@@ -60,9 +60,8 @@ export default function ApplyLeave() {
     } catch (err: any) {
       console.error('Leave application error:', err);
       
-      // Handle duplicate leave error
       if (err?.code === 'DUPLICATE_LEAVE' || err?.message?.includes('already have a leave')) {
-        setError('❌ You already have a leave application for this date. Please choose a different date.');
+        setError(' You already have a leave application for this date. Please choose a different date.');
       } else if (err?.message) {
         setError(err.message);
       } else if (err?.error?.message) {
