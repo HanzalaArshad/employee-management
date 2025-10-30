@@ -1,19 +1,18 @@
 // src/store/supabaseApi.ts
 import { createApi, fakeBaseQuery } from '@reduxjs/toolkit/query/react';
 import { supabase } from '../utils/supabaseClient';
-import type { User, Employee, EmployeeInsert, EmployeeUpdate, Attendance } from '../types';
+import type { User, Employee, EmployeeInsert, EmployeeUpdate, Attendance, Leave } from '../types';
 import { uploadEmployeeFile, listEmployeeFiles } from '../utils/storage';
 
 export const supabaseApi = createApi({
   reducerPath: 'supabaseApi',
   baseQuery: fakeBaseQuery(),
-  tagTypes: ['User', 'Employee', 'Attendance'],
+  tagTypes: ['User', 'Employee', 'Attendance', 'Leave'],
   endpoints: (builder) => ({
     // ==================== AUTH ====================
     login: builder.mutation<
       { user: User; session: any },
-      { email: string; password: string }
-    >({
+      { email: string; password: string }>({
       queryFn: async ({ email, password }) => {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -171,18 +170,15 @@ export const supabaseApi = createApi({
 
           if (employeeId) query = query.eq('employee_id', employeeId);
           
-          // Convert PKT date to UTC range for proper filtering
           if (startDate) {
-            // PKT date start (00:00) - 5 hours = UTC equivalent
             const utcStart = new Date(`${startDate}T00:00:00`);
-            utcStart.setHours(utcStart.getHours() - 5); // PKT to UTC
+            utcStart.setHours(utcStart.getHours() - 5);
             query = query.gte('check_in', utcStart.toISOString());
           }
           
           if (endDate) {
-            // PKT date end (23:59) - 5 hours = UTC equivalent
             const utcEnd = new Date(`${endDate}T23:59:59`);
-            utcEnd.setHours(utcEnd.getHours() - 5); // PKT to UTC
+            utcEnd.setHours(utcEnd.getHours() - 5);
             query = query.lte('check_in', utcEnd.toISOString());
           }
           
@@ -194,7 +190,6 @@ export const supabaseApi = createApi({
             return { error };
           }
           
-          console.log('Fetched attendance records:', data?.length);
           return { data: (data || []) as Attendance[] };
         } catch (err) {
           console.error('getAttendance exception:', err);
@@ -263,16 +258,13 @@ export const supabaseApi = createApi({
       invalidatesTags: [{ type: 'Attendance', id: 'LIST' }],
     }),
 
-    // FIXED: CheckOut mutation
     checkOut: builder.mutation<Attendance, { employeeId: string }>({
       queryFn: async ({ employeeId }) => {
         try {
-          console.log('Starting checkout for:', employeeId);
           const now = new Date();
           const pkTime = new Date(now.getTime() + 5 * 60 * 60 * 1000);
           const today = pkTime.toISOString().split('T')[0];
 
-          // 1. Find today's OPEN record (check_out = null)
           const { data: openRecord, error: fetchError } = await supabase
             .from('attendance')
             .select('*')
@@ -282,22 +274,14 @@ export const supabaseApi = createApi({
             .is('check_out', null)
             .maybeSingle();
 
-          console.log('Found record:', openRecord);
-          console.log('Fetch error:', fetchError);
-
           if (fetchError) return { error: fetchError };
           if (!openRecord) {
             return { error: { message: 'No active check-in found. Please refresh.' } };
           }
 
-          // 2. Calculate hours
           const checkInTime = new Date(openRecord.check_in);
           const hoursWorked = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
 
-          console.log('Updating record ID:', openRecord.id);
-          console.log('Hours worked:', hoursWorked);
-
-          // 3. Update with .single() - THIS IS THE FIX
           const { data: updatedRecord, error: updateError } = await supabase
             .from('attendance')
             .update({
@@ -306,78 +290,78 @@ export const supabaseApi = createApi({
             })
             .eq('id', openRecord.id)
             .select()
-            .single(); // ← Changed from .select() to .select().single()
+            .single();
 
-          console.log('Updated record:', updatedRecord);
-          console.log('Update error:', updateError);
-
-          if (updateError) {
-            console.error('Update failed:', updateError);
-            return { error: updateError };
-          }
-
+          if (updateError) return { error: updateError };
           if (!updatedRecord) {
             return { error: { message: 'Update returned no data. Check RLS policies.' } };
           }
 
           return { data: updatedRecord as Attendance };
         } catch (err) {
-          console.error('Checkout exception:', err);
           return { error: { message: 'Unexpected error: ' + (err as Error).message } };
         }
       },
       invalidatesTags: [{ type: 'Attendance', id: 'LIST' }],
     }),
 
-    // Add to endpoints
-getLeaves: builder.query<Leave[], { employeeId?: string; status?: string }>({
-  queryFn: async ({ employeeId, status }) => {
-    let query = supabase
-      .from('leaves')
-      .select('*, employees!employee_id(full_name)')
-      .order('created_at', { ascending: false });
-    if (employeeId) query = query.eq('employee_id', employeeId);
-    if (status) query = query.eq('status', status);
-    const { data, error } = await query;
-    if (error) return { error };
-    return { data: data as Leave[] };
-  },
-  providesTags: (result) =>
-    result
-      ? [...result.map(({ id }) => ({ type: 'Leave' as const, id })), { type: 'Leave', id: 'LIST' }]
-      : [{ type: 'Leave', id: 'LIST' }],
-}),
+    // ==================== LEAVES ====================
+    getLeaves: builder.query<Leave[], { employeeId?: string; status?: string }>({
+      queryFn: async ({ employeeId, status }) => {
+        let query = supabase
+          .from('leaves')
+          .select('*, employees!employee_id(full_name, position)')
+          .order('created_at', { ascending: false });
 
-applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by'>>({
-  queryFn: async (leave) => {
-    const { data, error } = await supabase
-      .from('leaves')
-      .insert({ ...leave, status: 'pending' })
-      .select()
-      .single();
-    if (error) return { error };
-    return { data: data as Leave };
-  },
-  invalidatesTags: [{ type: 'Leave', id: 'LIST' }],
-}),
+        if (employeeId) query = query.eq('employee_id', employeeId);
+        if (status) query = query.eq('status', status);
 
-updateLeaveStatus: builder.mutation<Leave, { id: string; status: 'approved' | 'rejected'; approved_by: string }>({
-  queryFn: async ({ id, status, approved_by }) => {
-    const { data, error } = await supabase
-      .from('leaves')
-      .update({ 
-        status, 
-        approved_by,
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) return { error };
-    return { data: data as Leave };
-  },
-  invalidatesTags: (result, error, { id }) => [{ type: 'Leave', id }, { type: 'Leave', id: 'LIST' }],
-}),
+        const { data, error } = await query;
+        if (error) return { error };
+        return { data: data as Leave[] };
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'Leave' as const, id })),
+              { type: 'Leave', id: 'LIST' },
+            ]
+          : [{ type: 'Leave', id: 'LIST' }],
+    }),
+
+    applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by' | 'employees'>>({
+      queryFn: async (leave) => {
+        const { data, error } = await supabase
+          .from('leaves')
+          .insert({ ...leave, status: 'pending' })
+          .select('*, employees!employee_id(full_name, position)')
+          .single();
+        if (error) return { error };
+        return { data: data as Leave };
+      },
+      invalidatesTags: [{ type: 'Leave', id: 'LIST' }],
+    }),
+
+    updateLeaveStatus: builder.mutation<Leave, { id: string; status: 'approved' | 'rejected'; approved_by: string }>({
+      queryFn: async ({ id, status, approved_by }) => {
+        const { data, error } = await supabase
+          .from('leaves')
+          .update({
+            status,
+            approved_by,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id)
+          .select('*, employees!employee_id(full_name, position)')
+          .single();
+        if (error) return { error };
+        return { data: data as Leave };
+      },
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Leave', id },
+        { type: 'Leave', id: 'LIST' },
+      ],
+    }),
   }),
 });
 

@@ -35,30 +35,33 @@ const drawerWidth = 240;
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
-  const { user, signOut, isRestoring } = useAuth(); // isRestoring = true during restore
+  const { user, signOut, isRestoring } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Menu
-  const commonMenuItems = [
+  const role = user?.role;
+
+  // Employee Menu
+  const employeeMenu = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Profile', icon: <PersonIcon />, path: '/dashboard/employee/profile' },
     { text: 'Attendance', icon: <AccessTimeIcon />, path: '/dashboard/employee/attendance' },
-
+    { text: 'My Leaves', icon: <EventIcon />, path: '/dashboard/employee/leaves' },
   ];
 
-  const adminMenuItems = [
+  // Admin Menu — DIFFERENT PATHS & TEXT
+  const adminMenu = [
     { text: 'Employees', icon: <PeopleIcon />, path: '/dashboard/admin/employees' },
-    { text: 'Attendance', icon: <AccessTimeIcon />, path: '/dashboard/admin/attendance' },
-    { text: 'Leaves', icon: <EventIcon />, path: '/dashboard/admin/leaves' },
+    { text: 'Admin Attendance', icon: <AccessTimeIcon />, path: '/dashboard/admin/attendance' }, // ← Different text
+    { text: 'Leave Requests', icon: <EventIcon />, path: '/dashboard/admin/leaves' },
     { text: 'Payroll', icon: <AttachMoneyIcon />, path: '/dashboard/admin/payroll' },
   ];
 
-  const menuItems = [
-    ...commonMenuItems,
-    ...(user?.role === 'admin' ? adminMenuItems : []),
-  ];
+  // Final Menu
+  const menuItems = role === 'admin'
+    ? [...employeeMenu, ...adminMenu]
+    : employeeMenu;
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
@@ -73,7 +76,7 @@ export default function DashboardLayout() {
       <Divider />
       <List>
         {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
+          <ListItem key={item.text} disablePadding> {/* ← KEY IS UNIQUE */}
             <ListItemButton
               onClick={() => {
                 navigate(item.path);
@@ -100,16 +103,7 @@ export default function DashboardLayout() {
 
   if (isRestoring) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          gap: 2,
-        }}
-      >
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 2 }}>
         <CircularProgress />
         <Typography variant="body1">Restoring session... Please wait</Typography>
       </Box>
@@ -123,6 +117,7 @@ export default function DashboardLayout() {
 
   return (
     <Box sx={{ display: 'flex' }}>
+      {/* App Bar */}
       <AppBar
         position="fixed"
         sx={{
@@ -141,14 +136,15 @@ export default function DashboardLayout() {
             HRM Dashboard
           </Typography>
           <Typography sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
-            Welcome, { user.email}
+            Welcome, {user.email}
           </Typography>
           <Avatar sx={{ bgcolor: 'secondary.main', width: 36, height: 36 }}>
-            {( user.email?.[0])?.toUpperCase()}
+            {user.email?.[0]?.toUpperCase()}
           </Avatar>
         </Toolbar>
       </AppBar>
 
+      {/* Drawer */}
       <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
         <Drawer
           variant="temporary"
@@ -166,7 +162,7 @@ export default function DashboardLayout() {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer- paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
           open
         >
@@ -174,6 +170,7 @@ export default function DashboardLayout() {
         </Drawer>
       </Box>
 
+      {/* Main Content */}
       <Box
         component="main"
         sx={{

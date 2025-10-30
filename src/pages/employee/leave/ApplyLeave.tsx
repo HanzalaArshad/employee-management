@@ -17,11 +17,15 @@ export default function ApplyLeave() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || !form.start_date) return;
+
     await applyLeave({
       employee_id: profile.id,
-      ...form,
+      type: form.type,
+      start_date: form.start_date,
+      reason: form.reason,
     });
+
     if (!error) navigate('/dashboard/employee/leaves');
   };
 
@@ -49,12 +53,13 @@ export default function ApplyLeave() {
 
         <TextField
           fullWidth
-          label="Date"
+          label="Leave Date"
           type="date"
           value={form.start_date}
           onChange={(e) => setForm({ ...form, start_date: e.target.value })}
           InputLabelProps={{ shrink: true }}
           margin="normal"
+          required
         />
 
         <TextField
@@ -68,7 +73,7 @@ export default function ApplyLeave() {
         />
 
         <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-          <Button variant="contained" type="submit" disabled={isLoading}>
+          <Button variant="contained" type="submit" disabled={isLoading || !form.start_date}>
             {isLoading ? 'Submitting...' : 'Apply'}
           </Button>
           <Button variant="outlined" onClick={() => navigate(-1)}>Cancel</Button>

@@ -9,6 +9,9 @@ import EmployeeProfile from '../pages/employee/profile/profile';
 import Employees from '../pages/admin/employee/Employees';
 import EmployeeAttendance from '../pages/employee/attendance/attendance';
 import AttendanceDashboard from '../pages/admin/attendance/AttendanceDashboard';
+import ApplyLeave from '../pages/employee/leave/ApplyLeave';
+import MyLeaves from '../pages/employee/leave/MyLeaves';
+import LeaveRequests from '../pages/admin/leave/LeaveRequests';
 import { CircularProgress, Box, Typography } from '@mui/material';
 
 const ProtectedRoute = ({
@@ -20,29 +23,17 @@ const ProtectedRoute = ({
 }) => {
   const { user, isRestoring } = useSelector((state: RootState) => state.auth);
 
-  // While restoring session → show loader (no redirect flicker)
   if (isRestoring) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          gap: 2,
-        }}
-      >
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 2 }}>
         <CircularProgress />
         <Typography variant="body1">Restoring session... Please wait</Typography>
       </Box>
     );
   }
 
-  // No user → redirect to login
   if (!user) return <Navigate to="/login" replace />;
 
-  // Admin-only route check
   if (adminOnly && user.role !== 'admin') {
     return <Navigate to="/dashboard/employee/profile" replace />;
   }
@@ -65,12 +56,16 @@ export const AppRoutes = () => (
         </ProtectedRoute>
       }
     >
-      {/* Default to Employee Profile */}
+      {/* Default Route */}
       <Route path="" element={<Navigate to="employee/profile" replace />} />
+
+      {/* Employee Routes */}
       <Route path="employee/profile" element={<EmployeeProfile />} />
       <Route path="employee/attendance" element={<EmployeeAttendance />} />
+      <Route path="employee/leaves" element={<MyLeaves />} />
+      <Route path="employee/leave/apply" element={<ApplyLeave />} />
 
-      {/* Admin-only routes */}
+      {/* Admin Routes */}
       <Route
         path="admin/employees"
         element={
@@ -84,6 +79,14 @@ export const AppRoutes = () => (
         element={
           <ProtectedRoute adminOnly>
             <AttendanceDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="admin/leaves"
+        element={
+          <ProtectedRoute adminOnly>
+            <LeaveRequests />
           </ProtectedRoute>
         }
       />

@@ -5,7 +5,7 @@ export * from './supabase';
 // Aliases for easy use
 export type Employee = Database['public']['Tables']['employees']['Row'];
 export type Attendance = Database['public']['Tables']['attendance']['Row'];
-export type Leave = Database['public']['Tables']['leaves']['Row'];
+// export type Leave = Database['public']['Tables']['leaves']['Row'];
 export type Payroll = Database['public']['Tables']['payroll']['Row'];
 
 export type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
@@ -27,8 +27,22 @@ export interface AttendanceSummary {
   is_late: boolean;
 }
 
-
-
+// src/types/index.ts
+export type Leave = {
+  id: string;
+  employee_id: string;
+  type: 'sick' | 'casual' | 'annual';
+  start_date: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  approved_by?: string;
+  created_at: string;
+  updated_at: string;
+  employees: {
+    full_name: string;
+    position: string;
+  };
+};
 export type LeaveType = 'sick' | 'personal';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
 export type PayrollStatus = 'draft' | 'approved' | 'paid';
