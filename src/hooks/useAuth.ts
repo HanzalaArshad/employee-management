@@ -1,4 +1,3 @@
-// src/hooks/useAuth.ts
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { type RootState, type AppDispatch } from '../store';
@@ -47,7 +46,6 @@ export const useAuth = () => {
           .eq('id', finalSession.user.id)
           .maybeSingle();
 
-        // 4️⃣ Save to Redux + localStorage
         dispatch(
           setCredentials({
             user: { ...finalSession.user, role: emp?.role || 'employee' },

@@ -1,4 +1,3 @@
-// src/store/supabaseApi.ts
 import { createApi, fakeBaseQuery } from '@reduxjs/toolkit/query/react';
 import { supabase } from '../utils/supabaseClient';
 import type { User, Employee, EmployeeInsert, EmployeeUpdate, Attendance, Leave } from '../types';
@@ -9,7 +8,6 @@ export const supabaseApi = createApi({
   baseQuery: fakeBaseQuery(),
   tagTypes: ['User', 'Employee', 'Attendance', 'Leave'],
   endpoints: (builder) => ({
-    // ==================== AUTH ====================
     login: builder.mutation<
       { user: User; session: any },
       { email: string; password: string }>({
@@ -75,7 +73,6 @@ export const supabaseApi = createApi({
       invalidatesTags: ['User', 'Employee'],
     }),
 
-    // ==================== PROFILE ====================
     getProfile: builder.query<Employee | null, void>({
       queryFn: async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -93,7 +90,6 @@ export const supabaseApi = createApi({
       providesTags: ['Employee'],
     }),
 
-    // ==================== EMPLOYEES ====================
     getEmployees: builder.query<Employee[], { search?: string; position?: string }>({
       queryFn: async ({ search, position }) => {
         let query = supabase.from('employees').select('*').order('full_name');
@@ -147,7 +143,6 @@ export const supabaseApi = createApi({
       providesTags: (result, error, employeeId) => [{ type: 'Employee', id: employeeId }],
     }),
 
-    // ==================== ATTENDANCE ====================
     getAttendance: builder.query<
       Attendance[],
       { employeeId?: string; startDate?: string; endDate?: string; search?: string }
@@ -419,20 +414,16 @@ applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' |
     }),
 
 deleteLeave: builder.mutation<void, string>({
-  queryFn: async (id) => {
-    console.log('🗑️ Deleting leave:', id);
-    
+  queryFn: async (id) => {    
     const { error, count } = await supabase
       .from('leaves')
       .delete()
       .eq('id', id);
     
     if (error) {
-      console.error('❌ Delete error:', error);
       return { error };
     }
     
-    console.log('✅ Deleted successfully, count:', count);
     return { data: undefined };
   },
   // CRITICAL: Must invalidate BOTH tags

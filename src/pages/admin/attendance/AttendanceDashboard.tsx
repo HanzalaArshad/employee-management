@@ -41,12 +41,10 @@ export default function AttendanceDashboard() {
     endDate: dateFilter,
   });
 
-  // ✅ NEW: Fetch approved leaves for selected date
   const { data: allLeaves = [], isLoading: loadingLeaves } = useGetLeavesQuery({
     status: 'approved'
   });
 
-  // ✅ NEW: Helper function to check if employee is on leave
   const isEmployeeOnLeave = (employeeId: string, date: string) => {
     return allLeaves.some(leave => {
       const leaveDate = leave.start_date;
@@ -61,7 +59,6 @@ export default function AttendanceDashboard() {
     });
   };
 
-  // ✅ NEW: Get leave type for employee on specific date
   const getLeaveType = (employeeId: string, date: string) => {
     const leave = allLeaves.find(l => {
       const leaveDate = l.start_date;
@@ -92,7 +89,6 @@ export default function AttendanceDashboard() {
         ? formatPakistanTime(record.check_out) 
         : "—";
 
-      // ✅ UPDATED: Status logic with leave check
       let status = "Absent";
       if (record) {
         status = "Present";
@@ -108,7 +104,7 @@ export default function AttendanceDashboard() {
         name: emp.full_name,
         position: emp.position || "—",
         status,
-        leaveType, // ✅ NEW
+        leaveType, 
         check_in: checkInTime,
         check_out: checkOutTime,
         hours_worked: typeof hoursWorked === 'number' ? hoursWorked.toFixed(2) : '0.00',
@@ -177,7 +173,7 @@ export default function AttendanceDashboard() {
     },
     { 
       field: "check_in", 
-      headerName: "Check-In (PKT)", 
+      headerName: "Check In ", 
       flex: 1,
       minWidth: 130,
       renderCell: (params) => (
@@ -191,7 +187,7 @@ export default function AttendanceDashboard() {
     },
     { 
       field: "check_out", 
-      headerName: "Check-Out (PKT)", 
+      headerName: "Check Out", 
       flex: 1,
       minWidth: 130,
       renderCell: (params) => (
@@ -240,7 +236,6 @@ export default function AttendanceDashboard() {
       headerName: "Status",
       flex: 1.2,
       minWidth: 140,
-      // ✅ UPDATED: Show leave type chip for on-leave employees
       renderCell: (params) => {
         const status = params.value;
         const leaveType = params.row.leaveType;
@@ -313,7 +308,6 @@ export default function AttendanceDashboard() {
           size="small"
           value={dateFilter}
           onChange={(e) => setDateFilter(e.target.value)}
-          InputLabelProps={{ shrink: true }}
           sx={{ width: 180 }}
         />
         
@@ -379,7 +373,6 @@ export default function AttendanceDashboard() {
           </Typography>
         </Box>
         
-        {/* ✅ NEW: On Leave Card */}
         <Box
           sx={{
             p: 2,

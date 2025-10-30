@@ -1,5 +1,3 @@
-// src/pages/employee/Attendance.tsx
-import React from 'react';
 import { Box, Typography, Button, Card, CardContent, Alert, CircularProgress } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { useGetProfileQuery, useGetAttendanceQuery, useCheckInMutation, useCheckOutMutation } from '../../../store/supabaseApi';

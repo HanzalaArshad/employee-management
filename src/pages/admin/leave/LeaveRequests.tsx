@@ -1,4 +1,3 @@
-// src/pages/admin/leave/LeaveRequests.tsx
 import { Box, Typography, Chip, IconButton, Tabs, Tab } from '@mui/material';
 import { Check, X } from '@mui/icons-material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';

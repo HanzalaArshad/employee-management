@@ -1,4 +1,3 @@
-// src/pages/employee/leave/ApplyLeave.tsx
 import { useState } from 'react';
 import { Box, TextField, Button, MenuItem, Alert, CircularProgress } from '@mui/material';
 import { useGetProfileQuery, useApplyLeaveMutation } from '../../../store/supabaseApi';
@@ -33,7 +32,6 @@ export default function ApplyLeave() {
       return;
     }
 
-    // Prevent past date submission
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const startDate = new Date(form.start_date);
