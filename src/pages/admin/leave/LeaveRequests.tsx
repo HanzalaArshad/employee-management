@@ -36,38 +36,49 @@ export default function LeaveRequests() {
     },
     { field: 'type', headerName: 'Type', width: 100 },
     { field: 'start_date', headerName: 'Date', width: 150 },
-    {
+      {
       field: 'status',
       headerName: 'Status',
       width: 120,
-      renderCell: (p) => {
-        const s = p.value;
+      renderCell: (params) => {
+        const status = params.value;
+        const color = status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'warning';
         return (
-          <Chip
-            label={s.toUpperCase()}
-            size="small"
-            color={s === 'approved' ? 'success' : s === 'rejected' ? 'error' : 'warning'}
-          />
+          <span style={{
+            padding: '4px 8px',
+            borderRadius: 4,
+            backgroundColor: color === 'success' ? '#d4edda' : color === 'error' ? '#f8d7da' : '#fff3cd',
+            color: color === 'success' ? '#155724' : color === 'error' ? '#721c24' : '#856404',
+            fontSize: '0.75rem',
+            fontWeight: 500,
+          }}>
+            {status.toUpperCase()}
+          </span>
         );
       },
     },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 120,
-      renderCell: (p) => (
-        p.row.status === 'pending' ? (
-          <Box>
-            <IconButton size="small" color="success" onClick={() => handleAction(p.row.id, 'approved')}>
-              <Check />
-            </IconButton>
-            <IconButton size="small" color="error" onClick={() => handleAction(p.row.id, 'rejected')}>
-              <X />
-            </IconButton>
-          </Box>
-        ) : null
-      ),
-    },
+ {
+  field: 'approver',
+  headerName: 'Approved By',
+  width: 150,
+  renderCell: (p) => {
+    const approverName = p.row.approver?.full_name || '-';
+    if (p.row.status === 'pending') {
+      return (
+        <Box>
+          <IconButton size="small" color="success" onClick={() => handleAction(p.row.id, 'approved')}>
+            <Check />
+          </IconButton>
+          <IconButton size="small" color="error" onClick={() => handleAction(p.row.id, 'rejected')}>
+            <X />
+          </IconButton>
+        </Box>
+      );
+    }
+    return approverName;
+  },
+},
+
   ];
 
   const loading = tab === 0 ? pendingLoading : allLoading;

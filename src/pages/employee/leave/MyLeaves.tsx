@@ -1,6 +1,6 @@
 // src/pages/employee/leave/MyLeaves.tsx
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
-import { DataGrid,type GridColDef } from '@mui/x-data-grid';
+import { Box, Typography, Button, CircularProgress, Alert } from '@mui/material';
+import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useGetProfileQuery, useGetLeavesQuery } from '../../../store/supabaseApi';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -21,7 +21,7 @@ export default function MyLeaves() {
       field: 'start_date',
       headerName: 'Date',
       width: 150,
-      // valueGetter: (params) => safeFormat(params.value, 'dd MMM yyyy'),
+      valueGetter: (params) => safeFormat(params.value, 'dd MMM yyyy'),
     },
     {
       field: 'status',
@@ -29,30 +29,44 @@ export default function MyLeaves() {
       width: 120,
       renderCell: (params) => {
         const status = params.value;
-        const color = status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'warning';
+        const color =
+          status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'warning';
         return (
-          <span style={{
-            padding: '4px 8px',
-            borderRadius: 4,
-            backgroundColor: color === 'success' ? '#d4edda' : color === 'error' ? '#f8d7da' : '#fff3cd',
-            color: color === 'success' ? '#155724' : color === 'error' ? '#721c24' : '#856404',
-            fontSize: '0.75rem',
-            fontWeight: 500,
-          }}>
-            {status.toUpperCase()}
+          <span
+            style={{
+              padding: '4px 8px',
+              borderRadius: 4,
+              backgroundColor:
+                color === 'success'
+                  ? '#d4edda'
+                  : color === 'error'
+                  ? '#f8d7da'
+                  : '#fff3cd',
+              color:
+                color === 'success'
+                  ? '#155724'
+                  : color === 'error'
+                  ? '#721c24'
+                  : '#856404',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+            }}
+          >
+            {status?.toUpperCase()}
           </span>
         );
       },
     },
     {
       field: 'created_at',
-      headerName: 'Applied',
+      headerName: 'Applied On',
       width: 150,
       valueGetter: (params) => safeFormat(params.value, 'dd MMM yyyy'),
     },
   ];
 
-  if (isLoading) return <CircularProgress sx={{ display: 'block', mx: 'auto', mt: 4 }} />;
+  if (isLoading)
+    return <CircularProgress sx={{ display: 'block', mx: 'auto', mt: 4 }} />;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -63,16 +77,45 @@ export default function MyLeaves() {
         </Button>
       </Box>
 
-      <Box sx={{ height: 500, width: '100%' }}>
-        <DataGrid
-          rows={leaves}
-          columns={columns}
-          getRowId={(row) => row.id}
-          loading={isLoading}
-          pageSizeOptions={[5, 10, 20]}
-          disableRowSelectionOnClick
-        />
-      </Box>
+      {leaves.length === 0 ? (
+        <Alert
+          severity="info"
+          sx={{
+            mt: 4,
+            textAlign: 'center',
+            justifyContent: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          You have not applied for any leaves yet.
+          <Button
+            variant="contained"
+            size="small"
+            sx={{ mt: 2 }}
+            component={Link}
+            to="/dashboard/employee/leave/apply"
+          >
+            Apply Now
+          </Button>
+        </Alert>
+      ) : (
+        <Box sx={{ height: 500, width: '100%' }}>
+          <DataGrid
+            rows={leaves}
+            columns={columns}
+            getRowId={(row) => row.id}
+            loading={isLoading}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 5, page: 0 } },
+              sorting: { sortModel: [{ field: 'created_at', sort: 'desc' }] },
+            }}
+            pageSizeOptions={[5, 10, 20]}
+            disableRowSelectionOnClick
+          />
+        </Box>
+      )}
     </Box>
   );
 }

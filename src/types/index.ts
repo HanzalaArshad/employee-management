@@ -42,6 +42,11 @@ export type Leave = {
     full_name: string;
     position: string;
   };
+
+
+  approver?: {
+    full_name: string;
+  };
 };
 export type LeaveType = 'sick' | 'personal';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';

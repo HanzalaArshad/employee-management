@@ -307,40 +307,95 @@ export const supabaseApi = createApi({
 
     // ==================== LEAVES ====================
     getLeaves: builder.query<Leave[], { employeeId?: string; status?: string }>({
-      queryFn: async ({ employeeId, status }) => {
-        let query = supabase
-          .from('leaves')
-          .select('*, employees!employee_id(full_name, position)')
-          .order('created_at', { ascending: false });
+  queryFn: async ({ employeeId, status }) => {
+    let query = supabase
+      .from('leaves')
+  .select(`
+  *,
+  employees!employee_id(full_name, position),
+  approver:employees!approved_by(full_name)
+`)
 
-        if (employeeId) query = query.eq('employee_id', employeeId);
-        if (status) query = query.eq('status', status);
 
-        const { data, error } = await query;
-        if (error) return { error };
-        return { data: data as Leave[] };
-      },
-      providesTags: (result) =>
-        result
-          ? [
-              ...result.map(({ id }) => ({ type: 'Leave' as const, id })),
-              { type: 'Leave', id: 'LIST' },
-            ]
-          : [{ type: 'Leave', id: 'LIST' }],
-    }),
 
-    applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by' | 'employees'>>({
-      queryFn: async (leave) => {
-        const { data, error } = await supabase
-          .from('leaves')
-          .insert({ ...leave, status: 'pending' })
-          .select('*, employees!employee_id(full_name, position)')
-          .single();
-        if (error) return { error };
-        return { data: data as Leave };
-      },
-      invalidatesTags: [{ type: 'Leave', id: 'LIST' }],
-    }),
+      .order('created_at', { ascending: false });
+
+    if (employeeId) query = query.eq('employee_id', employeeId);
+    if (status) query = query.eq('status', status);
+
+    const { data, error } = await query;
+    if (error) return { error };
+    return { data: data as Leave[] };
+  },
+  providesTags: (result) =>
+    result
+      ? [
+          ...result.map(({ id }) => ({ type: 'Leave' as const, id })),
+          { type: 'Leave', id: 'LIST' },
+        ]
+      : [{ type: 'Leave', id: 'LIST' }],
+}),
+
+
+
+
+applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by' | 'employees' | 'end_date'> & { end_date?: string }>({
+  queryFn: async (leave) => {
+    try {
+      // Check for duplicate leave on the same date
+      const { data: existingLeaves, error: checkError } = await supabase
+        .from('leaves')
+        .select('id, status, type')
+        .eq('employee_id', leave.employee_id)
+        .eq('start_date', leave.start_date);
+
+      if (checkError) {
+        console.error('Duplicate check error:', checkError);
+        return { error: checkError };
+      }
+
+      // If leave exists for this date
+      if (existingLeaves && existingLeaves.length > 0) {
+        const existingLeave = existingLeaves[0];
+        return { 
+          error: { 
+            message: `You already have a ${existingLeave.type} leave application for this date (Status: ${existingLeave.status})`,
+            code: 'DUPLICATE_LEAVE',
+            details: existingLeave
+          } 
+        };
+      }
+
+      // Insert new leave application
+      const { data, error } = await supabase
+        .from('leaves')
+        .insert({ 
+          ...leave, 
+          status: 'pending' 
+        })
+        .select('*, employees!employee_id(full_name, position)')
+        .single();
+      
+      if (error) {
+        console.error('Insert leave error:', error);
+        return { error };
+      }
+      
+      return { data: data as Leave };
+    } catch (err) {
+      console.error('applyLeave exception:', err);
+      return { 
+        error: { 
+          message: 'Failed to apply leave. Please try again.',
+          code: 'APPLY_LEAVE_ERROR'
+        } 
+      };
+    }
+  },
+  invalidatesTags: [{ type: 'Leave', id: 'LIST' }],
+}),
+
+
 
     updateLeaveStatus: builder.mutation<Leave, { id: string; status: 'approved' | 'rejected'; approved_by: string }>({
       queryFn: async ({ id, status, approved_by }) => {
@@ -362,6 +417,19 @@ export const supabaseApi = createApi({
         { type: 'Leave', id: 'LIST' },
       ],
     }),
+
+    deleteLeave: builder.mutation<void, string>({
+      queryFn: async (id) => {
+        const { error } = await supabase
+          .from('leaves')
+          .delete()
+          .eq('id', id);
+        
+        if (error) return { error };
+        return { data: undefined };
+      },
+      invalidatesTags: [{ type: 'Leave', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -380,4 +448,5 @@ export const {
   useGetLeavesQuery,
   useApplyLeaveMutation,
   useUpdateLeaveStatusMutation,
+  useDeleteLeaveMutation,
 } = supabaseApi;

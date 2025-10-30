@@ -12,7 +12,6 @@ import AttendanceDashboard from '../pages/admin/attendance/AttendanceDashboard';
 import ApplyLeave from '../pages/employee/leave/ApplyLeave';
 import MyLeaves from '../pages/employee/leave/MyLeaves';
 import LeaveRequests from '../pages/admin/leave/LeaveRequests';
-import { CircularProgress, Box, Typography } from '@mui/material';
 
 const ProtectedRoute = ({
   children,
@@ -21,17 +20,9 @@ const ProtectedRoute = ({
   children: JSX.Element;
   adminOnly?: boolean;
 }) => {
-  const { user, isRestoring } = useSelector((state: RootState) => state.auth);
+  const { user } = useSelector((state: RootState) => state.auth);
 
-  if (isRestoring) {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 2 }}>
-        <CircularProgress />
-        <Typography variant="body1">Restoring session... Please wait</Typography>
-      </Box>
-    );
-  }
-
+ 
   if (!user) return <Navigate to="/login" replace />;
 
   if (adminOnly && user.role !== 'admin') {
@@ -43,11 +34,9 @@ const ProtectedRoute = ({
 
 export const AppRoutes = () => (
   <Routes>
-    {/* Public Routes */}
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
 
-    {/* Protected Dashboard */}
     <Route
       path="/dashboard/*"
       element={
@@ -56,16 +45,13 @@ export const AppRoutes = () => (
         </ProtectedRoute>
       }
     >
-      {/* Default Route */}
       <Route path="" element={<Navigate to="employee/profile" replace />} />
 
-      {/* Employee Routes */}
       <Route path="employee/profile" element={<EmployeeProfile />} />
       <Route path="employee/attendance" element={<EmployeeAttendance />} />
       <Route path="employee/leaves" element={<MyLeaves />} />
       <Route path="employee/leave/apply" element={<ApplyLeave />} />
 
-      {/* Admin Routes */}
       <Route
         path="admin/employees"
         element={
@@ -92,7 +78,7 @@ export const AppRoutes = () => (
       />
     </Route>
 
-    {/* Redirects */}
+    
     <Route path="/" element={<Navigate to="/login" replace />} />
     <Route path="*" element={<Navigate to="/login" replace />} />
   </Routes>
