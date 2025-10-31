@@ -334,7 +334,7 @@ export const supabaseApi = createApi({
 
 
 
-applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by' | 'employees' | 'end_date'> & { end_date?: string }>({
+  applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by' | 'employees' | 'end_date'> & { end_date?: string }>({
   queryFn: async (leave) => {
     try {
       // Check for duplicate leave on the same date

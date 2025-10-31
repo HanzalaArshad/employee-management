@@ -26,7 +26,7 @@ import {
 import { formatPKR } from '../../../utils/formatters';
 import Papa from 'papaparse';
 import type { Employee } from '../../../types';
-// import { supabase } from '../../../utils/supabaseClient';
+import { Delete as DeleteIcon } from '@mui/icons-material';
 
 const schema = z.object({
   full_name: z.string().min(2, 'Full name required'),
@@ -47,6 +47,8 @@ export default function Employees() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [updateError, setUpdateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
 
   const {
     data: employees = [],
@@ -305,17 +307,31 @@ export default function Employees() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit(onSubmit)}
-            variant="contained"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? <CircularProgress size={20} /> : editingEmployee ? 'Save' : 'Create'}
-          </Button>
-        </DialogActions>
+  <Button onClick={() => setOpenDialog(false)} disabled={isSubmitting}>
+    Cancel
+  </Button>
+
+  {editingEmployee && (
+    <IconButton
+      color="error"
+      size="small"
+      onClick={() => setConfirmDeleteOpen(true)}
+      title="Delete"
+      disabled={isSubmitting}
+    >
+      <DeleteIcon fontSize="small" />
+    </IconButton>
+  )}
+
+  <Button
+    variant="contained"
+    onClick={handleSubmit(onSubmit)}
+    disabled={isSubmitting}
+  >
+    {isSubmitting ? 'Saving...' : 'Save'}
+  </Button>
+</DialogActions>
+
       </Dialog>
     </Box>
   );

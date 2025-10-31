@@ -1,4 +1,3 @@
-// src/pages/dashboard/Layout.tsx
 import { useState } from 'react';
 import {
   Box,
@@ -42,7 +41,7 @@ export default function DashboardLayout() {
 
   const role = user?.role;
 
- // In Layout.tsx — menuItems
+ 
 const employeeMenu = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Profile', icon: <PersonIcon />, path: '/dashboard/employee/profile' },
@@ -57,7 +56,6 @@ const adminMenu = [
   { text: 'Leave Requests', icon: <EventIcon />, path: '/dashboard/admin/leaves' },
   { text: 'Payroll Dashboard', icon: <AttachMoneyIcon />, path: '/dashboard/admin/payroll' },
 ];
-  // Final Menu
   const menuItems = role === 'admin'
     ? [...employeeMenu, ...adminMenu]
     : employeeMenu;
@@ -169,7 +167,6 @@ const adminMenu = [
         </Drawer>
       </Box>
 
-      {/* Main Content */}
       <Box
         component="main"
         sx={{
@@ -179,7 +176,6 @@ const adminMenu = [
           mt: { xs: 7, sm: 8 },
         }}
       >
-        <Toolbar />
         <Outlet />
       </Box>
     </Box>
