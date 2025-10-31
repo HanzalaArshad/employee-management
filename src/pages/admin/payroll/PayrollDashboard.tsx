@@ -1,13 +1,12 @@
 // src/pages/admin/payroll/PayrollDashboard.tsx
 import { useState } from 'react';
 import { Box, Typography, Button, TextField, CircularProgress } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useGetPayrollQuery, useGeneratePayrollMutation, useApprovePayrollMutation } from '../../../store/supabaseApi';
 import { useGetEmployeesQuery } from '../../../store/supabaseApi';
-import { format } from 'date-fns';
 
 export default function PayrollDashboard() {
-  const [month, setMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7));
+  const [month, setMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7)); // YYYY-MM
 
   const { data: employees } = useGetEmployeesQuery({});
   const { data: payrolls = [], isLoading } = useGetPayrollQuery({ month });
@@ -15,13 +14,18 @@ export default function PayrollDashboard() {
   const [approvePayroll] = useApprovePayrollMutation();
 
   const handleGenerate = async () => {
-    for (const emp of employees || []) {
+    if (!employees) return;
+    for (const emp of employees) {
       await generatePayroll({ employeeId: emp.id, month });
     }
   };
 
+  const handleApprove = (id: string) => {
+    approvePayroll({ id });
+  };
+
   const columns: GridColDef[] = [
-    { field: 'employees.full_name', headerName: 'Name', width: 150 },
+    { field: 'employees.full_name', headerName: 'Name', width: 180 },
     { field: 'base_salary', headerName: 'Base', width: 100 },
     { field: 'late_deduction', headerName: 'Late Deduction', width: 120 },
     { field: 'leave_deduction', headerName: 'Leave Deduction', width: 120 },
@@ -30,9 +34,9 @@ export default function PayrollDashboard() {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 100,
-      renderCell: (p) => p.row.status === 'draft' && (
-        <Button size="small" onClick={() => approvePayroll({ id: p.row.id })}>Approve</Button>
+      width: 120,
+      renderCell: (params) => params.row.status === 'draft' && (
+        <Button size="small" onClick={() => handleApprove(params.row.id)}>Approve</Button>
       ),
     },
   ];
@@ -54,7 +58,13 @@ export default function PayrollDashboard() {
       </Button>
 
       <Box sx={{ height: 600, mt: 2 }}>
-        <DataGrid rows={payrolls} columns={columns} getRowId={(r) => r.id} />
+        <DataGrid
+          rows={payrolls}
+          columns={columns}
+          getRowId={(r) => r.id}
+          loading={isLoading}
+          pageSizeOptions={[5, 10, 20]}
+        />
       </Box>
     </Box>
   );

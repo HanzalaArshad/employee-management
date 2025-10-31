@@ -609,20 +609,34 @@ approvePayroll: builder.mutation<Payroll, { id: string }>({
   invalidatesTags: [{ type: 'Payroll', id: 'LIST' }],
 }),
 
-exportPayslipPDF: builder.query<string, { payrollId: string }>({
+// In exportPayslipPDF query
+// src/store/supabaseApi.ts — Add to endpoints
+exportPayslipPDF: builder.mutation<string, { payrollId: string }>({
   queryFn: async ({ payrollId }) => {
-    const { data: payroll } = await supabase.from('payroll').select('*').eq('id', payrollId).single();
-    if (!payroll) return { error: { message: 'Payroll not found' } };
+    try {
+      const { data: payroll } = await supabase.from('payroll').select('*').eq('id', payrollId).single();
+      if (!payroll) return { error: { message: 'Payroll not found' } };
 
-    // Generate PDF (use jsPDF)
-    const { jsPDF } = await import('jspdf');
-    const doc = new jsPDF();
-    doc.text(`Payslip for ${payroll.month}`, 10, 10);
-    doc.text(`Base: Rs${payroll.base_salary}`, 10, 20);
-    doc.text(`Net: Rs${payroll.net_salary}`, 10, 30);
-    const pdfBlob = doc.output('blob');
-    const pdfUrl = URL.createObjectURL(pdfBlob);
-    return { data: pdfUrl };
+      // Import jsPDF (dynamic for tree-shaking)
+      const { jsPDF } = await import('jspdf');
+
+      const doc = new jsPDF();
+      doc.setFontSize(20);
+      doc.text('Payslip', 20, 20);
+      doc.setFontSize(12);
+      doc.text(`Employee: ${payroll.employees?.full_name || 'N/A'}`, 20, 40);
+      doc.text(`Month: ${payroll.month}`, 20, 50);
+      doc.text(`Base Salary: Rs${payroll.base_salary.toFixed(0)}`, 20, 60);
+      doc.text(`Late Deduction: Rs${payroll.late_deduction.toFixed(0)}`, 20, 70);
+      doc.text(`Leave Deduction: Rs${payroll.leave_deduction.toFixed(0)}`, 20, 80);
+      doc.text(`Net Salary: Rs${payroll.net_salary.toFixed(0)}`, 20, 90);
+
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      return { data: pdfUrl };
+    } catch (err) {
+      return { error: { message: 'PDF generation failed' } };
+    }
   },
 }),
 
@@ -652,4 +666,5 @@ export const {
   useGetPayslipQuery,
   useApprovePayrollMutation,
   useExportPayslipPDFQuery,
+  useExportPayslipPDFMutation,
 } = supabaseApi;

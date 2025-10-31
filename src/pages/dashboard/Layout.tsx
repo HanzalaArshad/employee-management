@@ -42,22 +42,21 @@ export default function DashboardLayout() {
 
   const role = user?.role;
 
-  // Employee Menu
-  const employeeMenu = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Profile', icon: <PersonIcon />, path: '/dashboard/employee/profile' },
-    { text: 'Attendance', icon: <AccessTimeIcon />, path: '/dashboard/employee/attendance' },
-    { text: 'My Leaves', icon: <EventIcon />, path: '/dashboard/employee/leaves' },
-  ];
+ // In Layout.tsx — menuItems
+const employeeMenu = [
+  { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+  { text: 'Profile', icon: <PersonIcon />, path: '/dashboard/employee/profile' },
+  { text: 'Attendance', icon: <AccessTimeIcon />, path: '/dashboard/employee/attendance' },
+  { text: 'My Leaves', icon: <EventIcon />, path: '/dashboard/employee/leaves' },
+  { text: 'Payslip', icon: <AttachMoneyIcon />, path: '/dashboard/employee/payroll' },
+];
 
-  // Admin Menu — DIFFERENT PATHS & TEXT
-  const adminMenu = [
-    { text: 'Employees', icon: <PeopleIcon />, path: '/dashboard/admin/employees' },
-    { text: 'Admin Attendance', icon: <AccessTimeIcon />, path: '/dashboard/admin/attendance' }, // ← Different text
-    { text: 'Leave Requests', icon: <EventIcon />, path: '/dashboard/admin/leaves' },
-    { text: 'Payroll', icon: <AttachMoneyIcon />, path: '/dashboard/admin/payroll' },
-  ];
-
+const adminMenu = [
+  { text: 'Employees', icon: <PeopleIcon />, path: '/dashboard/admin/employees' },
+  { text: 'Admin Attendance', icon: <AccessTimeIcon />, path: '/dashboard/admin/attendance' },
+  { text: 'Leave Requests', icon: <EventIcon />, path: '/dashboard/admin/leaves' },
+  { text: 'Payroll Dashboard', icon: <AttachMoneyIcon />, path: '/dashboard/admin/payroll' },
+];
   // Final Menu
   const menuItems = role === 'admin'
     ? [...employeeMenu, ...adminMenu]
@@ -76,7 +75,7 @@ export default function DashboardLayout() {
       <Divider />
       <List>
         {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding> {/* ← KEY IS UNIQUE */}
+          <ListItem key={item.text} disablePadding>
             <ListItemButton
               onClick={() => {
                 navigate(item.path);
@@ -162,7 +161,7 @@ export default function DashboardLayout() {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer- paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
           open
         >

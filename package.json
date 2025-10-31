@@ -23,6 +23,8 @@
     "@supabase/supabase-js": "^2.76.1",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.18",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.3",
     "lucide-react": "^0.548.0",
     "papaparse": "^5.5.3",
     "react": "^19.1.1",
