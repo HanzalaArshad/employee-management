@@ -1,12 +1,12 @@
 import { createApi, fakeBaseQuery } from '@reduxjs/toolkit/query/react';
 import { supabase } from '../utils/supabaseClient';
-import type { User, Employee, EmployeeInsert, EmployeeUpdate, Attendance, Leave } from '../types';
+import type { User, Employee, EmployeeInsert, EmployeeUpdate, Attendance, Leave, Payroll } from '../types';
 import { uploadEmployeeFile, listEmployeeFiles } from '../utils/storage';
 
 export const supabaseApi = createApi({
   reducerPath: 'supabaseApi',
   baseQuery: fakeBaseQuery(),
-  tagTypes: ['User', 'Employee', 'Attendance', 'Leave'],
+  tagTypes: ['User', 'Employee', 'Attendance', 'Leave', 'Payroll'],
   endpoints: (builder) => ({
     login: builder.mutation<
       { user: User; session: any },
@@ -441,8 +441,14 @@ getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
       .from('payroll')
       .select('*, employees!employee_id(full_name, position)')
       .order('generated_at', { ascending: false });
+
     if (employeeId) query = query.eq('employee_id', employeeId);
-    if (month) query = query.eq('month', month);
+    if (month) {
+      // Ensure month format is YYYY-MM-01 for database
+      const formattedMonth = month.includes('-01') ? month : `${month}-01`;
+      query = query.eq('month', formattedMonth);
+    }
+
     const { data, error } = await query;
     if (error) return { error };
     return { data: data as Payroll[] };
@@ -453,188 +459,213 @@ getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
       : [{ type: 'Payroll', id: 'LIST' }],
 }),
 
+
+
+
+
 generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }>({
   queryFn: async ({ employeeId, month }) => {
-    // Get base salary
-    const { data: emp } = await supabase.from('employees').select('salary').eq('id', employeeId).single();
-    if (!emp) return { error: { message: 'Employee not found' } };
+    try {
+      // Ensure month format is YYYY-MM
+      const monthStr = month.length === 7 ? month : month.substring(0, 7);
+      
+      // Get base salary
+      const { data: emp, error: empError } = await supabase
+        .from('employees')
+        .select('salary')
+        .eq('id', employeeId)
+        .single();
+      
+      if (empError || !emp) return { error: { message: 'Employee not found' } };
 
-    // Get late hours
-    const { data: attendance } = await supabase
-      .from('attendance')
-      .select('hours_worked, check_in')
-      .eq('employee_id', employeeId)
-      .gte('check_in', `${month}-01T00:00:00Z`)
-      .lte('check_in', `${month}-01T23:59:59Z`);
-    const lateHours = attendance?.filter(a => a.is_late).length || 0;
+      // Calculate date range for the month
+      const year = parseInt(monthStr.split('-')[0]);
+      const monthNum = parseInt(monthStr.split('-')[1]);
+      const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
+      const endDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59));
 
-    // Get leave days
-    const { data: leaves } = await supabase
-      .from('leaves')
-      .select('start_date')
-      .eq('employee_id', employeeId)
-      .eq('status', 'approved')
-      .gte('start_date', `${month}-01`)
-      .lte('start_date', `${month}-31`);
-    const leaveDays = leaves?.length || 0;
-    const excessLeaves = Math.max(0, leaveDays - 2);
+      // Get attendance records for the month
+      const { data: attendance } = await supabase
+        .from('attendance')
+        .select('is_late, hours_worked, check_in')
+        .eq('employee_id', employeeId)
+        .gte('check_in', startDate.toISOString())
+        .lte('check_in', endDate.toISOString());
 
-    // Calculate deductions
-    const baseSalary = emp.salary;
-    const lateDeduction = lateHours * (baseSalary * 0.05); // 5% per hour
-    const leaveDeduction = excessLeaves * (baseSalary * 0.1); // 10% per excess leave
-    const netSalary = baseSalary - lateDeduction - leaveDeduction;
+      const lateCount = attendance?.filter(a => a.is_late).length || 0;
 
-    // Insert payroll
-    const { data, error } = await supabase
-      .from('payroll')
-      .insert({
-        employee_id: employeeId,
-        month,
-        base_salary: baseSalary,
-        late_hours: lateHours,
-        late_deduction: lateDeduction,
-        leave_days_taken: leaveDays,
-        excess_leaves: excessLeaves,
-        leave_deduction: leaveDeduction,
-        net_salary: netSalary,
-      })
-      .select()
-      .single();
+      // Get approved leaves for the month
+      const { data: leaves } = await supabase
+        .from('leaves')
+        .select('start_date, end_date')
+        .eq('employee_id', employeeId)
+        .eq('status', 'approved')
+        .gte('start_date', startDate.toISOString().split('T')[0])
+        .lte('start_date', endDate.toISOString().split('T')[0]);
 
-    if (error) return { error };
-    return { data: data as Payroll };
+      // Calculate total leave days
+      const leaveDays = leaves?.length || 0;
+      const excessLeaves = Math.max(0, leaveDays - 2); // 2 free leaves per month
+
+      // Calculate deductions
+      const baseSalary = emp.salary;
+      const lateDeduction = lateCount * (baseSalary * 0.05); // 5% per late day
+      const leaveDeduction = excessLeaves * (baseSalary * 0.1); // 10% per excess leave
+      const netSalary = baseSalary - lateDeduction - leaveDeduction;
+
+      // Check if payroll already exists for this month
+      const { data: existing } = await supabase
+        .from('payroll')
+        .select('id')
+        .eq('employee_id', employeeId)
+        .eq('month', `${monthStr}-01`)
+        .single();
+
+      if (existing) {
+        return { error: { message: 'Payroll already exists for this month' } };
+      }
+
+      // Insert payroll record
+      const { data, error } = await supabase
+        .from('payroll')
+        .insert({
+          employee_id: employeeId,
+          month: `${monthStr}-01`, // Store as YYYY-MM-01
+          base_salary: baseSalary,
+          late_hours: lateCount,
+          late_deduction: parseFloat(lateDeduction.toFixed(2)),
+          leave_days_taken: leaveDays,
+          excess_leaves: excessLeaves,
+          leave_deduction: parseFloat(leaveDeduction.toFixed(2)),
+          net_salary: parseFloat(netSalary.toFixed(2)),
+          status: 'draft',
+        })
+        .select('*, employees!employee_id(full_name, position)')
+        .single();
+
+      if (error) return { error };
+      return { data: data as Payroll };
+    } catch (err) {
+      console.error('generatePayroll error:', err);
+      return { error: { message: 'Failed to generate payroll' } };
+    }
   },
   invalidatesTags: [{ type: 'Payroll', id: 'LIST' }],
 }),
 
-getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
-  queryFn: async ({ employeeId, month }) => {
-    let query = supabase
-      .from('payroll')
-      .select('*, employees!employee_id(full_name, position)')
-      .order('generated_at', { ascending: false });
-    if (employeeId) query = query.eq('employee_id', employeeId);
-    if (month) query = query.eq('month', month);
-    const { data, error } = await query;
-    if (error) return { error };
-    return { data: data as Payroll[] };
-  },
-  providesTags: (result) =>
-    result
-      ? [...result.map(({ id }) => ({ type: 'Payroll' as const, id })), { type: 'Payroll', id: 'LIST' }]
-      : [{ type: 'Payroll', id: 'LIST' }],
-}),
-
-generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }>({
-  queryFn: async ({ employeeId, month }) => {
-    // Get base salary
-    const { data: emp } = await supabase.from('employees').select('salary').eq('id', employeeId).single();
-    if (!emp) return { error: { message: 'Employee not found' } };
-
-    // Get late hours
-    const { data: attendance } = await supabase
-      .from('attendance')
-      .select('hours_worked, check_in')
-      .eq('employee_id', employeeId)
-      .gte('check_in', `${month}-01T00:00:00Z`)
-      .lte('check_in', `${month}-01T23:59:59Z`);
-    const lateHours = attendance?.filter(a => a.is_late).length || 0;
-
-    // Get leave days
-    const { data: leaves } = await supabase
-      .from('leaves')
-      .select('start_date')
-      .eq('employee_id', employeeId)
-      .eq('status', 'approved')
-      .gte('start_date', `${month}-01`)
-      .lte('start_date', `${month}-31`);
-    const leaveDays = leaves?.length || 0;
-    const excessLeaves = Math.max(0, leaveDays - 2);
-
-    // Calculate deductions
-    const baseSalary = emp.salary;
-    const lateDeduction = lateHours * (baseSalary * 0.05); // 5% per hour
-    const leaveDeduction = excessLeaves * (baseSalary * 0.1); // 10% per excess leave
-    const netSalary = baseSalary - lateDeduction - leaveDeduction;
-
-    // Insert payroll
-    const { data, error } = await supabase
-      .from('payroll')
-      .insert({
-        employee_id: employeeId,
-        month,
-        base_salary: baseSalary,
-        late_hours: lateHours,
-        late_deduction: lateDeduction,
-        leave_days_taken: leaveDays,
-        excess_leaves: excessLeaves,
-        leave_deduction: leaveDeduction,
-        net_salary: netSalary,
-      })
-      .select()
-      .single();
-
-    if (error) return { error };
-    return { data: data as Payroll };
-  },
-  invalidatesTags: [{ type: 'Payroll', id: 'LIST' }],
-}),
 
 getPayslip: builder.query<Payroll, { employeeId: string; month: string }>({
   queryFn: async ({ employeeId, month }) => {
+    // Ensure month format is YYYY-MM-01
+    const formattedMonth = month.includes('-01') ? month : `${month}-01`;
+    
     const { data, error } = await supabase
       .from('payroll')
       .select('*, employees!employee_id(full_name, position)')
       .eq('employee_id', employeeId)
-      .eq('month', month)
+      .eq('month', formattedMonth)
       .single();
+    
     if (error) return { error };
     return { data: data as Payroll };
   },
-  providesTags: (result, error, { employeeId, month }) => [{ type: 'Payroll', id: employeeId + month }],
+  providesTags: (result, error, { employeeId, month }) => [
+    { type: 'Payroll', id: `${employeeId}-${month}` }
+  ],
 }),
 
 approvePayroll: builder.mutation<Payroll, { id: string }>({
   queryFn: async ({ id }) => {
     const { data, error } = await supabase
       .from('payroll')
-      .update({ status: 'approved', approved_at: new Date().toISOString() })
+      .update({ 
+        status: 'approved', 
+        approved_at: new Date().toISOString() 
+      })
       .eq('id', id)
-      .select()
+      .select('*, employees!employee_id(full_name, position)')
       .single();
+    
     if (error) return { error };
     return { data: data as Payroll };
   },
   invalidatesTags: [{ type: 'Payroll', id: 'LIST' }],
 }),
 
-// In exportPayslipPDF query
-// src/store/supabaseApi.ts — Add to endpoints
 exportPayslipPDF: builder.mutation<string, { payrollId: string }>({
   queryFn: async ({ payrollId }) => {
     try {
-      const { data: payroll } = await supabase.from('payroll').select('*').eq('id', payrollId).single();
-      if (!payroll) return { error: { message: 'Payroll not found' } };
+      const { data: payroll, error } = await supabase
+        .from('payroll')
+        .select('*, employees!employee_id(full_name, position)')
+        .eq('id', payrollId)
+        .single();
+      
+      if (error || !payroll) return { error: { message: 'Payroll not found' } };
 
-      // Import jsPDF (dynamic for tree-shaking)
+      // Dynamic import for jsPDF
       const { jsPDF } = await import('jspdf');
 
       const doc = new jsPDF();
-      doc.setFontSize(20);
-      doc.text('Payslip', 20, 20);
+      
+      // Header
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('PAYSLIP', 105, 20, { align: 'center' });
+      
+      // Employee Info
       doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
       doc.text(`Employee: ${payroll.employees?.full_name || 'N/A'}`, 20, 40);
-      doc.text(`Month: ${payroll.month}`, 20, 50);
-      doc.text(`Base Salary: Rs${payroll.base_salary.toFixed(0)}`, 20, 60);
-      doc.text(`Late Deduction: Rs${payroll.late_deduction.toFixed(0)}`, 20, 70);
-      doc.text(`Leave Deduction: Rs${payroll.leave_deduction.toFixed(0)}`, 20, 80);
-      doc.text(`Net Salary: Rs${payroll.net_salary.toFixed(0)}`, 20, 90);
+      doc.text(`Position: ${payroll.employees?.position || 'N/A'}`, 20, 48);
+      doc.text(`Month: ${new Date(payroll.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`, 20, 56);
+      doc.text(`Generated: ${new Date(payroll.generated_at).toLocaleDateString()}`, 20, 64);
+      
+      // Divider
+      doc.setLineWidth(0.5);
+      doc.line(20, 70, 190, 70);
+      
+      // Salary Details
+      doc.setFont('helvetica', 'bold');
+      doc.text('Salary Details', 20, 80);
+      doc.setFont('helvetica', 'normal');
+      
+      doc.text('Base Salary:', 20, 90);
+      doc.text(`Rs ${payroll.base_salary.toFixed(2)}`, 150, 90, { align: 'right' });
+      
+      // Deductions
+      doc.setFont('helvetica', 'bold');
+      doc.text('Deductions', 20, 105);
+      doc.setFont('helvetica', 'normal');
+      
+      doc.text(`Late Days (${payroll.late_hours}):`, 20, 115);
+      doc.text(`- Rs ${payroll.late_deduction.toFixed(2)}`, 150, 115, { align: 'right' });
+      
+      doc.text(`Excess Leaves (${payroll.excess_leaves}):`, 20, 123);
+      doc.text(`- Rs ${payroll.leave_deduction.toFixed(2)}`, 150, 123, { align: 'right' });
+      
+      // Divider
+      doc.line(20, 130, 190, 130);
+      
+      // Net Salary
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Net Salary:', 20, 142);
+      doc.text(`Rs ${payroll.net_salary.toFixed(2)}`, 150, 142, { align: 'right' });
+      
+      // Status
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      doc.text(`Status: ${payroll.status.toUpperCase()}`, 20, 155);
+      if (payroll.approved_at) {
+        doc.text(`Approved on: ${new Date(payroll.approved_at).toLocaleDateString()}`, 20, 162);
+      }
 
       const pdfBlob = doc.output('blob');
       const pdfUrl = URL.createObjectURL(pdfBlob);
       return { data: pdfUrl };
     } catch (err) {
+      console.error('PDF generation error:', err);
       return { error: { message: 'PDF generation failed' } };
     }
   },
@@ -665,6 +696,5 @@ export const {
   useGeneratePayrollMutation,
   useGetPayslipQuery,
   useApprovePayrollMutation,
-  useExportPayslipPDFQuery,
   useExportPayslipPDFMutation,
 } = supabaseApi;
