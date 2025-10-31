@@ -1,4 +1,3 @@
-// src/utils/storage.ts
 import { supabase } from './supabaseClient';
 
 export const uploadEmployeeFile = async (file: File, employeeId: string, type: 'cv' | 'id' | 'contract'): Promise<string | null> => {
@@ -14,7 +13,7 @@ export const uploadEmployeeFile = async (file: File, employeeId: string, type: '
 
   const { data: { signedUrl } } = supabase.storage
     .from('employee-files')
-    .createSignedUrl(data.path, 3600);  // 1 hour
+    .createSignedUrl(data.path, 3600); 
 
   return signedUrl;
 };

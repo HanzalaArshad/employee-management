@@ -6,7 +6,6 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Keep token in sync with localStorage
 supabase.auth.onAuthStateChange((_event, session) => {
   if (session?.access_token) {
     localStorage.setItem('sb-token', session.access_token);

@@ -1,4 +1,3 @@
-// src/hooks/useRealtimeAttendance.ts
 import { useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useDispatch } from 'react-redux';

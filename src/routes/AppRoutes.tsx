@@ -1,4 +1,3 @@
-// src/routes/AppRoutes.tsx
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store';
@@ -38,7 +37,9 @@ const ProtectedRoute = ({
         }}
       >
         <CircularProgress />
-        <Typography variant="body1">Restoring session... Please wait</Typography>
+        <Typography variant="body1">
+          Restoring session... Please wait
+        </Typography>
       </Box>
     );
   }

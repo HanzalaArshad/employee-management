@@ -125,7 +125,6 @@ export const supabaseApi = createApi({
       invalidatesTags: ['Employee'],
     }),
 
-    // ==================== FILES ====================
     uploadEmployeeFile: builder.mutation<string, { file: File; employeeId: string; type: 'cv' | 'id' | 'contract' }>({
       queryFn: async ({ file, employeeId, type }) => {
         const signedUrl = await uploadEmployeeFile(file, employeeId, type);
@@ -300,7 +299,6 @@ export const supabaseApi = createApi({
       invalidatesTags: [{ type: 'Attendance', id: 'LIST' }],
     }),
 
-    // ==================== LEAVES ====================
     getLeaves: builder.query<Leave[], { employeeId?: string; status?: string }>({
   queryFn: async ({ employeeId, status }) => {
     let query = supabase
@@ -337,7 +335,6 @@ export const supabaseApi = createApi({
   applyLeave: builder.mutation<Leave, Omit<Leave, 'id' | 'status' | 'created_at' | 'updated_at' | 'approved_by' | 'employees' | 'end_date'> & { end_date?: string }>({
   queryFn: async (leave) => {
     try {
-      // Check for duplicate leave on the same date
       const { data: existingLeaves, error: checkError } = await supabase
         .from('leaves')
         .select('id, status, type')
@@ -349,7 +346,6 @@ export const supabaseApi = createApi({
         return { error: checkError };
       }
 
-      // If leave exists for this date
       if (existingLeaves && existingLeaves.length > 0) {
         const existingLeave = existingLeaves[0];
         return { 
@@ -361,7 +357,6 @@ export const supabaseApi = createApi({
         };
       }
 
-      // Insert new leave application
       const { data, error } = await supabase
         .from('leaves')
         .insert({ 
@@ -434,7 +429,6 @@ deleteLeave: builder.mutation<void, string>({
 }),
 
 
-// Add to endpoints
 getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
   queryFn: async ({ employeeId, month }) => {
     let query = supabase
@@ -444,7 +438,6 @@ getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
 
     if (employeeId) query = query.eq('employee_id', employeeId);
     if (month) {
-      // Ensure month format is YYYY-MM-01 for database
       const formattedMonth = month.includes('-01') ? month : `${month}-01`;
       query = query.eq('month', formattedMonth);
     }
@@ -466,10 +459,8 @@ getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
 generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }>({
   queryFn: async ({ employeeId, month }) => {
     try {
-      // Ensure month format is YYYY-MM
       const monthStr = month.length === 7 ? month : month.substring(0, 7);
       
-      // Get base salary
       const { data: emp, error: empError } = await supabase
         .from('employees')
         .select('salary')
@@ -478,13 +469,11 @@ generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }
       
       if (empError || !emp) return { error: { message: 'Employee not found' } };
 
-      // Calculate date range for the month
       const year = parseInt(monthStr.split('-')[0]);
       const monthNum = parseInt(monthStr.split('-')[1]);
       const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
       const endDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59));
 
-      // Get attendance records for the month
       const { data: attendance } = await supabase
         .from('attendance')
         .select('is_late, hours_worked, check_in')
@@ -494,7 +483,6 @@ generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }
 
       const lateCount = attendance?.filter(a => a.is_late).length || 0;
 
-      // Get approved leaves for the month
       const { data: leaves } = await supabase
         .from('leaves')
         .select('start_date, end_date')
@@ -503,17 +491,14 @@ generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }
         .gte('start_date', startDate.toISOString().split('T')[0])
         .lte('start_date', endDate.toISOString().split('T')[0]);
 
-      // Calculate total leave days
       const leaveDays = leaves?.length || 0;
       const excessLeaves = Math.max(0, leaveDays - 2); // 2 free leaves per month
 
-      // Calculate deductions
       const baseSalary = emp.salary;
       const lateDeduction = lateCount * (baseSalary * 0.05); // 5% per late day
       const leaveDeduction = excessLeaves * (baseSalary * 0.1); // 10% per excess leave
       const netSalary = baseSalary - lateDeduction - leaveDeduction;
 
-      // Check if payroll already exists for this month
       const { data: existing } = await supabase
         .from('payroll')
         .select('id')
@@ -525,12 +510,11 @@ generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }
         return { error: { message: 'Payroll already exists for this month' } };
       }
 
-      // Insert payroll record
       const { data, error } = await supabase
         .from('payroll')
         .insert({
           employee_id: employeeId,
-          month: `${monthStr}-01`, // Store as YYYY-MM-01
+          month: `${monthStr}-01`, 
           base_salary: baseSalary,
           late_hours: lateCount,
           late_deduction: parseFloat(lateDeduction.toFixed(2)),
@@ -603,17 +587,14 @@ exportPayslipPDF: builder.mutation<string, { payrollId: string }>({
       
       if (error || !payroll) return { error: { message: 'Payroll not found' } };
 
-      // Dynamic import for jsPDF
       const { jsPDF } = await import('jspdf');
 
       const doc = new jsPDF();
       
-      // Header
       doc.setFontSize(24);
       doc.setFont('helvetica', 'bold');
       doc.text('PAYSLIP', 105, 20, { align: 'center' });
       
-      // Employee Info
       doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
       doc.text(`Employee: ${payroll.employees?.full_name || 'N/A'}`, 20, 40);
@@ -621,11 +602,9 @@ exportPayslipPDF: builder.mutation<string, { payrollId: string }>({
       doc.text(`Month: ${new Date(payroll.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`, 20, 56);
       doc.text(`Generated: ${new Date(payroll.generated_at).toLocaleDateString()}`, 20, 64);
       
-      // Divider
       doc.setLineWidth(0.5);
       doc.line(20, 70, 190, 70);
       
-      // Salary Details
       doc.setFont('helvetica', 'bold');
       doc.text('Salary Details', 20, 80);
       doc.setFont('helvetica', 'normal');
@@ -633,7 +612,6 @@ exportPayslipPDF: builder.mutation<string, { payrollId: string }>({
       doc.text('Base Salary:', 20, 90);
       doc.text(`Rs ${payroll.base_salary.toFixed(2)}`, 150, 90, { align: 'right' });
       
-      // Deductions
       doc.setFont('helvetica', 'bold');
       doc.text('Deductions', 20, 105);
       doc.setFont('helvetica', 'normal');
@@ -644,16 +622,13 @@ exportPayslipPDF: builder.mutation<string, { payrollId: string }>({
       doc.text(`Excess Leaves (${payroll.excess_leaves}):`, 20, 123);
       doc.text(`- Rs ${payroll.leave_deduction.toFixed(2)}`, 150, 123, { align: 'right' });
       
-      // Divider
       doc.line(20, 130, 190, 130);
       
-      // Net Salary
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('Net Salary:', 20, 142);
       doc.text(`Rs ${payroll.net_salary.toFixed(2)}`, 150, 142, { align: 'right' });
       
-      // Status
       doc.setFontSize(10);
       doc.setFont('helvetica', 'italic');
       doc.text(`Status: ${payroll.status.toUpperCase()}`, 20, 155);

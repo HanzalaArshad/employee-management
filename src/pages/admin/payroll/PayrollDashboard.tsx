@@ -1,12 +1,18 @@
 // src/pages/admin/payroll/PayrollDashboard.tsx
 import { useState } from 'react';
-import { Box, Typography, Button, TextField, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, TextField } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { useGetPayrollQuery, useGeneratePayrollMutation, useApprovePayrollMutation } from '../../../store/supabaseApi';
+import {
+  useGetPayrollQuery,
+  useGeneratePayrollMutation,
+  useApprovePayrollMutation,
+} from '../../../store/supabaseApi';
 import { useGetEmployeesQuery } from '../../../store/supabaseApi';
 
 export default function PayrollDashboard() {
-  const [month, setMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7)); // YYYY-MM
+  const [month, setMonth] = useState(
+    new Date().toISOString().split('T')[0].substring(0, 7)
+  ); // YYYY-MM
 
   const { data: employees } = useGetEmployeesQuery({});
   const { data: payrolls = [], isLoading } = useGetPayrollQuery({ month });
@@ -35,15 +41,20 @@ export default function PayrollDashboard() {
       field: 'actions',
       headerName: 'Actions',
       width: 120,
-      renderCell: (params) => params.row.status === 'draft' && (
-        <Button size="small" onClick={() => handleApprove(params.row.id)}>Approve</Button>
-      ),
+      renderCell: (params) =>
+        params.row.status === 'draft' && (
+          <Button size="small" onClick={() => handleApprove(params.row.id)}>
+            Approve
+          </Button>
+        ),
     },
   ];
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>Payroll Dashboard</Typography>
+      <Typography variant="h5" gutterBottom>
+        Payroll Dashboard
+      </Typography>
 
       <TextField
         label="Month"
@@ -63,7 +74,12 @@ export default function PayrollDashboard() {
           columns={columns}
           getRowId={(r) => r.id}
           loading={isLoading}
-          pageSizeOptions={[5, 10, 20]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 50 } },
+          }}
+          pageSizeOptions={[10, 25, 50, 100]}
+          paginationMode="client"
+          disableRowSelectionOnClick
         />
       </Box>
     </Box>
