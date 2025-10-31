@@ -6,7 +6,7 @@ export * from './supabase';
 export type Employee = Database['public']['Tables']['employees']['Row'];
 export type Attendance = Database['public']['Tables']['attendance']['Row'];
 // export type Leave = Database['public']['Tables']['leaves']['Row'];
-export type Payroll = Database['public']['Tables']['payroll']['Row'];
+// export type Payroll = Database['public']['Tables']['payroll']['Row'];
 
 export type EmployeeInsert = Database['public']['Tables']['employees']['Insert'];
 export type EmployeeUpdate = Database['public']['Tables']['employees']['Update'];
@@ -47,6 +47,26 @@ export interface Leave {
     full_name: string;
   };
 }
+
+
+export type Payroll = {
+  id: string;
+  employee_id: string;
+  month: string; // '2025-10-01'
+  base_salary: number;
+  late_hours: number;
+  late_deduction: number;
+  leave_days_taken: number;
+  leave_allowance: number;
+  excess_leaves: number;
+  leave_deduction: number;
+  net_salary: number;
+  status: 'draft' | 'approved' | 'paid';
+  generated_at: string;
+  approved_at?: string;
+  paid_at?: string;
+  employees?: { full_name: string; position: string };
+};
 export type LeaveType = 'sick' | 'personal';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
 export type PayrollStatus = 'draft' | 'approved' | 'paid';
