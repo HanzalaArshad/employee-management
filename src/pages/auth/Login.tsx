@@ -1,9 +1,16 @@
-// src/pages/auth/Login.tsx
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Box, Button, TextField, Typography, Container, Alert, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Container,
+  Alert,
+  CircularProgress,
+} from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLoginMutation } from '../../store/supabaseApi';
 import { useDispatch } from 'react-redux';
@@ -24,25 +31,29 @@ export default function Login() {
   const [resendLoading, setResendLoading] = React.useState(false);
   const [resendEmail, setResendEmail] = React.useState('');
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   });
 
-const onSubmit = async (data: LoginForm) => {
-  try {
-    const result = await login(data).unwrap();
-dispatch(
-  setCredentials({
-    user: result.user,
-    token: result.token,
-    refreshToken: result.refreshToken,
-  })
-);
-    navigate('/dashboard/employee/profile');
-  } catch (err) {
-    console.error(err);
-  }
-};
+  const onSubmit = async (data: LoginForm) => {
+    try {
+      const result = await login(data).unwrap();
+      dispatch(
+        setCredentials({
+          user: result.user,
+          token: result.token,
+          refreshToken: result.refreshToken,
+        })
+      );
+      navigate('/dashboard/employee/profile');
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleResend = async () => {
     if (!resendEmail) return;
@@ -61,12 +72,29 @@ dispatch(
 
   return (
     <Container component="main" maxWidth="xs">
-      <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Typography component="h1" variant="h4">HRM Login</Typography>
-        {error && <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
-          {(error as any).data?.message || 'Login failed. Check email confirmation.'}
-        </Alert>}
-        <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate sx={{ mt: 1, width: '100%' }}>
+      <Box
+        sx={{
+          marginTop: 8,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <Typography component="h1" variant="h4">
+          HRM Login
+        </Typography>
+        {error && (
+          <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
+            {(error as any).data?.message ||
+              'Login failed. Check email confirmation.'}
+          </Alert>
+        )}
+        <Box
+          component="form"
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+          sx={{ mt: 1, width: '100%' }}
+        >
           <TextField
             margin="normal"
             required
@@ -101,12 +129,16 @@ dispatch(
           >
             {isLoading ? <CircularProgress size={24} /> : 'Sign In'}
           </Button>
-          <Button fullWidth variant="outlined" sx={{ mt: 1 }} component={Link} to="/register">
+          <Button
+            fullWidth
+            variant="outlined"
+            sx={{ mt: 1 }}
+            component={Link}
+            to="/register"
+          >
             Don't have an account? Register
           </Button>
         </Box>
-
-       
       </Box>
     </Container>
   );

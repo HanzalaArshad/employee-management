@@ -1,4 +1,3 @@
-// src/utils/formatters.ts
 export const formatPKR = (amount: number): string => {
   return new Intl.NumberFormat('en-PK', {
     style: 'currency',

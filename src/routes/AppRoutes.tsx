@@ -55,11 +55,9 @@ const ProtectedRoute = ({
 
 export const AppRoutes = () => (
   <Routes>
-    {/* Public Routes */}
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
 
-    {/* Protected Dashboard */}
     <Route
       path="/dashboard/*"
       element={
@@ -68,10 +66,8 @@ export const AppRoutes = () => (
         </ProtectedRoute>
       }
     >
-      {/* Default to Employee Profile */}
       <Route path="" element={<Navigate to="employee/profile" replace />} />
 
-      {/* Employee Routes */}
       <Route path="employee/profile" element={<EmployeeProfile />} />
       <Route path="employee/attendance" element={<EmployeeAttendance />} />
       <Route path="employee/leaves" element={<MyLeaves />} />

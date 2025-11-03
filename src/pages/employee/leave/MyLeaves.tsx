@@ -1,8 +1,23 @@
-// src/pages/employee/leave/MyLeaves.tsx
 import { useState } from 'react';
-import { Box, Typography, Button, CircularProgress, Alert, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Alert,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText,
+} from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { useGetProfileQuery, useGetLeavesQuery, useDeleteLeaveMutation } from '../../../store/supabaseApi';
+import {
+  useGetProfileQuery,
+  useGetLeavesQuery,
+  useDeleteLeaveMutation,
+} from '../../../store/supabaseApi';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -15,52 +30,63 @@ const safeFormat = (dateString: string, fmt: string = 'dd MMM yyyy') => {
 
 export default function MyLeaves() {
   const { data: profile } = useGetProfileQuery();
-const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({ 
-  employeeId: profile?.id 
-});  const [deleteLeave, { isLoading: isDeleting }] = useDeleteLeaveMutation();
+  const {
+    data: leaves = [],
+    isLoading,
+    refetch,
+  } = useGetLeavesQuery({
+    employeeId: profile?.id,
+  });
+  const [deleteLeave, { isLoading: isDeleting }] = useDeleteLeaveMutation();
 
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; leaveId: string | null; leaveDate: string }>({
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    leaveId: string | null;
+    leaveDate: string;
+  }>({
     open: false,
     leaveId: null,
     leaveDate: '',
   });
 
-  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [alert, setAlert] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const handleDeleteClick = (leaveId: string, leaveDate: string) => {
     setDeleteDialog({ open: true, leaveId, leaveDate });
   };
 
   const handleDeleteConfirm = async () => {
-  if (!deleteDialog.leaveId) return;
+    if (!deleteDialog.leaveId) return;
 
-  try {
-    await deleteLeave(deleteDialog.leaveId).unwrap();
-    
-    // FORCE IMMEDIATE REFETCH
-    await refetch();
-    
-    setAlert({ type: 'success', message: '✅ Leave deleted successfully!' });
-    setDeleteDialog({ open: false, leaveId: null, leaveDate: '' });
-    
-    setTimeout(() => setAlert(null), 3000);
-  } catch (err: any) {
-    console.error('Delete leave error:', err);
-    setAlert({ 
-      type: 'error', 
-      message: err?.message || 'Failed to delete leave. Please try again.' 
-    });
-  }
-};
+    try {
+      await deleteLeave(deleteDialog.leaveId).unwrap();
+
+      await refetch();
+
+      setAlert({ type: 'success', message: ' Leave deleted successfully!' });
+      setDeleteDialog({ open: false, leaveId: null, leaveDate: '' });
+
+      setTimeout(() => setAlert(null), 3000);
+    } catch (err: any) {
+      console.error('Delete leave error:', err);
+      setAlert({
+        type: 'error',
+        message: err?.message || 'Failed to delete leave. Please try again.',
+      });
+    }
+  };
 
   const handleDeleteCancel = () => {
     setDeleteDialog({ open: false, leaveId: null, leaveDate: '' });
   };
 
   const columns: GridColDef[] = [
-    { 
-      field: 'type', 
-      headerName: 'Type', 
+    {
+      field: 'type',
+      headerName: 'Type',
       width: 120,
     },
     {
@@ -74,7 +100,9 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
       width: 200,
       renderCell: (params) => (
         <span title={params.value}>
-          {params.value?.length > 30 ? params.value.slice(0, 30) + '...' : params.value}
+          {params.value?.length > 30
+            ? params.value.slice(0, 30) + '...'
+            : params.value}
         </span>
       ),
     },
@@ -85,7 +113,11 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
       renderCell: (params) => {
         const status = params.value;
         const color =
-          status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'warning';
+          status === 'approved'
+            ? 'success'
+            : status === 'rejected'
+              ? 'error'
+              : 'warning';
         return (
           <span
             style={{
@@ -95,14 +127,14 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
                 color === 'success'
                   ? '#d4edda'
                   : color === 'error'
-                  ? '#f8d7da'
-                  : '#fff3cd',
+                    ? '#f8d7da'
+                    : '#fff3cd',
               color:
                 color === 'success'
                   ? '#155724'
                   : color === 'error'
-                  ? '#721c24'
-                  : '#856404',
+                    ? '#721c24'
+                    : '#856404',
               fontSize: '0.75rem',
               fontWeight: 500,
             }}
@@ -112,7 +144,7 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
         );
       },
     },
-   
+
     {
       field: 'actions',
       headerName: 'Actions',
@@ -120,14 +152,15 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
       sortable: false,
       renderCell: (params) => {
         const status = params.row.status;
-        // Only allow delete for pending leaves
         if (status !== 'pending') return null;
-        
+
         return (
           <IconButton
             color="error"
             size="small"
-            onClick={() => handleDeleteClick(params.row.id, params.row.start_date)}
+            onClick={() =>
+              handleDeleteClick(params.row.id, params.row.start_date)
+            }
             title="Delete Leave"
           >
             <DeleteIcon fontSize="small" />
@@ -144,13 +177,21 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h5">My Leaves</Typography>
-        <Button variant="contained" component={Link} to="/dashboard/employee/leave/apply">
+        <Button
+          variant="contained"
+          component={Link}
+          to="/dashboard/employee/leave/apply"
+        >
           Apply Leave
         </Button>
       </Box>
 
       {alert && (
-        <Alert severity={alert.type} sx={{ mb: 2 }} onClose={() => setAlert(null)}>
+        <Alert
+          severity={alert.type}
+          sx={{ mb: 2 }}
+          onClose={() => setAlert(null)}
+        >
           {alert.message}
         </Alert>
       )}
@@ -181,7 +222,8 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
       ) : (
         <>
           <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Note:</strong> You can only delete leaves that are in "Pending" status.
+            <strong>Note:</strong> You can only delete leaves that are in
+            "Pending" status.
           </Alert>
           <Box sx={{ height: 500, width: '100%' }}>
             <DataGrid
@@ -216,9 +258,9 @@ const { data: leaves = [], isLoading, refetch } = useGetLeavesQuery({
           <Button onClick={handleDeleteCancel} disabled={isDeleting}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleDeleteConfirm} 
-            color="error" 
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
             variant="contained"
             disabled={isDeleting}
           >

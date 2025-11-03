@@ -1,4 +1,3 @@
-// src/pages/admin/employees/Employees.tsx
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,8 +46,7 @@ export default function Employees() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [updateError, setUpdateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const {
     data: employees = [],
@@ -68,8 +66,6 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     resolver: zodResolver(schema),
   });
 
-  
-
   const handleEdit = (emp: Employee) => {
     setEditingEmployee(emp);
     setValue('full_name', emp.full_name ?? '');
@@ -78,7 +74,6 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     setValue('phone', emp.phone ?? '');
     setValue('address', emp.address ?? '');
     setValue('date_of_birth', emp.date_of_birth ?? '');
-    setValue('role', emp.role ?? 'employee');
     setUpdateError('');
     setOpenDialog(true);
   };
@@ -110,7 +105,6 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
       role: data.role,
       updated_at: new Date().toISOString(),
     };
-
 
     try {
       await updateEmployee({ id: editingEmployee.id, ...payload }).unwrap();
@@ -146,11 +140,11 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const columns: GridColDef[] = [
     { field: 'full_name', headerName: 'Name', flex: 1 },
     { field: 'position', headerName: 'Position', flex: 1 },
-  {
-    field: 'salary',
-    headerName: 'Salary (PKR)',
-    flex: 1,
-  },
+    {
+      field: 'salary',
+      headerName: 'Salary (PKR)',
+      flex: 1,
+    },
     { field: 'phone', headerName: 'Phone', flex: 1 },
     { field: 'role', headerName: 'Role', flex: 0.5 },
     {
@@ -159,7 +153,10 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
       flex: 1,
       renderCell: (params) => (
         <>
-          <Button size="small" onClick={() => handleEdit(params.row as Employee)}>
+          <Button
+            size="small"
+            onClick={() => handleEdit(params.row as Employee)}
+          >
             Edit
           </Button>
           <Button
@@ -201,14 +198,18 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
           value={positionFilter}
           onChange={(e) => setPositionFilter(e.target.value)}
         />
-       
+
         <Button variant="outlined" onClick={handleExport}>
           Export CSV
         </Button>
       </Box>
 
       {updateError && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUpdateError('')}>
+        <Alert
+          severity="error"
+          sx={{ mb: 2 }}
+          onClose={() => setUpdateError('')}
+        >
           {updateError}
         </Alert>
       )}
@@ -239,7 +240,9 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{editingEmployee ? 'Edit Employee' : 'Add Employee'}</DialogTitle>
+        <DialogTitle>
+          {editingEmployee ? 'Edit Employee' : 'Add Employee'}
+        </DialogTitle>
         <DialogContent>
           <Box component="form" sx={{ mt: 1 }}>
             <TextField
@@ -307,31 +310,30 @@ const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
           </Box>
         </DialogContent>
         <DialogActions>
-  <Button onClick={() => setOpenDialog(false)} disabled={isSubmitting}>
-    Cancel
-  </Button>
+          <Button onClick={() => setOpenDialog(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
 
-  {editingEmployee && (
-    <IconButton
-      color="error"
-      size="small"
-      onClick={() => setConfirmDeleteOpen(true)}
-      title="Delete"
-      disabled={isSubmitting}
-    >
-      <DeleteIcon fontSize="small" />
-    </IconButton>
-  )}
+          {editingEmployee && (
+            <IconButton
+              color="error"
+              size="small"
+              onClick={() => setConfirmDeleteOpen(true)}
+              title="Delete"
+              disabled={isSubmitting}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
 
-  <Button
-    variant="contained"
-    onClick={handleSubmit(onSubmit)}
-    disabled={isSubmitting}
-  >
-    {isSubmitting ? 'Saving...' : 'Save'}
-  </Button>
-</DialogActions>
-
+          <Button
+            variant="contained"
+            onClick={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

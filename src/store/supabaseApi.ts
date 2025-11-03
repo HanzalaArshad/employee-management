@@ -429,17 +429,18 @@ deleteLeave: builder.mutation<void, string>({
 }),
 
 
+// src/store/supabaseApi.ts — Update getPayroll
 getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
   queryFn: async ({ employeeId, month }) => {
     let query = supabase
       .from('payroll')
-      .select('*, employees!employee_id(full_name, position)')
+      .select('*, employees!employee_id(full_name, position, join_date)') // ← ADD join_date
       .order('generated_at', { ascending: false });
 
     if (employeeId) query = query.eq('employee_id', employeeId);
     if (month) {
-      const formattedMonth = month.includes('-01') ? month : `${month}-01`;
-      query = query.eq('month', formattedMonth);
+      const fullMonth = `${month}-01`; // YYYY-MM-01
+      query = query.eq('month', fullMonth);
     }
 
     const { data, error } = await query;
@@ -450,6 +451,77 @@ getPayroll: builder.query<Payroll[], { employeeId?: string; month?: string }>({
     result
       ? [...result.map(({ id }) => ({ type: 'Payroll' as const, id })), { type: 'Payroll', id: 'LIST' }]
       : [{ type: 'Payroll', id: 'LIST' }],
+}),
+
+// Update generatePayroll — Salary Fetch SAFE
+generatePayroll: builder.mutation<Payroll, { employeeId: string; month: string }>({
+  queryFn: async ({ employeeId, month }) => {
+    try {
+      // 1. Get employee with salary
+      const { data: emp, error: empErr } = await supabase
+        .from('employees')
+        .select('salary, full_name, position, join_date')
+        .eq('id', employeeId)
+        .single();
+
+      if (empErr || !emp) return { error: { message: 'Employee not found' } };
+      const baseSalary = emp.salary || 0; // ← SAFE default
+
+      // 2. Get late hours
+      const { data: attendance, error: attErr } = await supabase
+        .from('attendance')
+        .select('is_late')
+        .eq('employee_id', employeeId)
+        .gte('check_in', `${month}-01T00:00:00Z`)
+        .lte('check_in', `${month}-31T23:59:59Z`);
+
+      if (attErr) return { error: attErr };
+      const lateHours = attendance?.filter(a => a.is_late).length || 0;
+
+      // 3. Get leave days
+      const { data: leaves, error: leaveErr } = await supabase
+        .from('leaves')
+        .select('start_date')
+        .eq('employee_id', employeeId)
+        .eq('status', 'approved')
+        .gte('start_date', `${month}-01`)
+        .lte('start_date', `${month}-31`);
+
+      if (leaveErr) return { error: leaveErr };
+      const leaveDays = leaves?.length || 0;
+      const excessLeaves = Math.max(0, leaveDays - 2);
+
+      // 4. Calculate
+      const lateDeduction = lateHours * (baseSalary * 0.05);
+      const leaveDeduction = excessLeaves * (baseSalary * 0.1);
+      const netSalary = baseSalary - lateDeduction - leaveDeduction;
+
+      // 5. Insert
+      const { data, error } = await supabase
+        .from('payroll')
+        .insert({
+          employee_id: employeeId,
+          month: `${month}-01`,
+          base_salary: baseSalary,
+          late_hours: lateHours,
+          late_deduction: lateDeduction,
+          leave_days_taken: leaveDays,
+          leave_allowance: 2,
+          excess_leaves: excessLeaves,
+          leave_deduction: leaveDeduction,
+          net_salary: netSalary,
+          status: 'draft',
+        })
+        .select()
+        .single();
+
+      if (error) return { error };
+      return { data: data as Payroll };
+    } catch (err) {
+      return { error: { message: 'Generation failed' } };
+    }
+  },
+  invalidatesTags: [{ type: 'Payroll', id: 'LIST' }],
 }),
 
 
